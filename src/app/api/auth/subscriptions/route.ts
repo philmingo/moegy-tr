@@ -1,38 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
+import { createClient } from '@supabase/supabase-js'
 
-// Mock school levels based on what I saw in the schools API
-const mockSchoolLevels = [
-  { id: '1', name: 'Nursery' },
-  { id: '2', name: 'Primary' },
-  { id: '3', name: 'Secondary' }
-]
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+)
 
-// Mock regions from the regions API
-const mockRegions = [
-  { id: '1', name: 'Region 1 - Barima-Waini' },
-  { id: '2', name: 'Region 2 - Pomeroon-Supenaam' },
-  { id: '3', name: 'Region 3 - Essequibo Islands-West Demerara' },
-  { id: '4', name: 'Region 4 - Demerara-Mahaica' },
-  { id: '5', name: 'Region 5 - Mahaica-Berbice' },
-  { id: '6', name: 'Region 6 - East Berbice-Corentyne' },
-  { id: '7', name: 'Region 7 - Cuyuni-Mazaruni' },
-  { id: '8', name: 'Region 8 - Potaro-Siparuni' },
-  { id: '9', name: 'Region 9 - Upper Takutu-Upper Essequibo' },
-  { id: '10', name: 'Region 10 - Upper Demerara-Berbice' }
-]
+async function fetchRegions() {
+  try {
+    const { data, error } = await supabase
+      .from('sms_regions')
+      .select('id, name')
+      .order('name')
 
-// Mock subscriptions data (in real app, this would be from database)
-const mockSubscriptions: Record<string, Array<{regionId: string, schoolLevelId: string}>> = {
-  'phil.mingo@moe.gov.gy': [
-    { regionId: '4', schoolLevelId: '2' }, // Region 4, Primary
-    { regionId: '4', schoolLevelId: '3' }, // Region 4, Secondary
-  ],
-  'j.martinez@moe.gov.gy': [
-    { regionId: '1', schoolLevelId: '1' }, // Region 1, Nursery
-    { regionId: '1', schoolLevelId: '2' }, // Region 1, Primary
-  ]
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error fetching regions:', error)
+    return []
+  }
+}
+
+async function fetchSchoolLevels() {
+  try {
+    const { data, error } = await supabase
+      .from('sms_school_levels')
+      .select('id, name')
+      .order('name')
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error fetching school levels:', error)
+    return []
+  }
 }
 
 async function getAuthenticatedUser(request: NextRequest) {
@@ -64,25 +73,51 @@ export async function GET(request: NextRequest) {
 
     console.log('Authenticated user for subscriptions:', user) // Debug log
 
-    const userSubscriptions = mockSubscriptions[user.email] || []
-    
-    // Convert subscription data to include region and school level names
-    const subscriptionsWithDetails = userSubscriptions.map(sub => {
-      const region = mockRegions.find(r => r.id === sub.regionId)
-      const schoolLevel = mockSchoolLevels.find(sl => sl.id === sub.schoolLevelId)
-      
-      return {
-        regionId: sub.regionId,
-        regionName: region?.name || 'Unknown Region',
-        schoolLevelId: sub.schoolLevelId,
-        schoolLevelName: schoolLevel?.name || 'Unknown Level'
-      }
-    })
+    // Fetch available regions and school levels from database
+    const [regions, schoolLevels] = await Promise.all([
+      fetchRegions(),
+      fetchSchoolLevels()
+    ])
+
+    // Fetch user's current subscriptions from database
+    const { data: userSubscriptions, error: subscriptionsError } = await supabase
+      .from('sms1_officer_subscriptions')
+      .select(`
+        region_id,
+        school_level_id,
+        sms_regions!region_id (
+          id,
+          name
+        ),
+        sms_school_levels!school_level_id (
+          id,
+          name
+        )
+      `)
+      .eq('officer_email', user.email)
+
+    if (subscriptionsError) {
+      console.error('Error fetching user subscriptions:', subscriptionsError)
+      // Return empty subscriptions but still provide available options
+      return NextResponse.json({
+        subscriptions: [],
+        availableRegions: regions,
+        availableSchoolLevels: schoolLevels
+      })
+    }
+
+    // Convert subscription data to expected format
+    const subscriptionsWithDetails = (userSubscriptions || []).map((sub: any) => ({
+      regionId: sub.region_id,
+      regionName: sub.sms_regions?.name || 'Unknown Region',
+      schoolLevelId: sub.school_level_id,
+      schoolLevelName: sub.sms_school_levels?.name || 'Unknown Level'
+    }))
 
     return NextResponse.json({
       subscriptions: subscriptionsWithDetails,
-      availableRegions: mockRegions,
-      availableSchoolLevels: mockSchoolLevels
+      availableRegions: regions,
+      availableSchoolLevels: schoolLevels
     })
   } catch (error) {
     console.error('Error fetching subscriptions:', error)
@@ -114,6 +149,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Fetch available regions and school levels for validation
+    const [regions, schoolLevels] = await Promise.all([
+      fetchRegions(),
+      fetchSchoolLevels()
+    ])
+
     // Validate subscription data
     for (const sub of subscriptions) {
       if (!sub.regionId || !sub.schoolLevelId) {
@@ -123,8 +164,8 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      const regionExists = mockRegions.find(r => r.id === sub.regionId)
-      const schoolLevelExists = mockSchoolLevels.find(sl => sl.id === sub.schoolLevelId)
+      const regionExists = regions.find((r: any) => r.id === sub.regionId)
+      const schoolLevelExists = schoolLevels.find((sl: any) => sl.id === sub.schoolLevelId)
       
       if (!regionExists || !schoolLevelExists) {
         return NextResponse.json(
@@ -134,22 +175,58 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update subscriptions (in real app, this would update the database)
-    mockSubscriptions[user.email] = subscriptions
+    // Delete existing subscriptions for this user
+    const { error: deleteError } = await supabase
+      .from('sms1_officer_subscriptions')
+      .delete()
+      .eq('officer_email', user.email)
+
+    if (deleteError) {
+      console.error('Error deleting existing subscriptions:', deleteError)
+      return NextResponse.json(
+        { error: 'Failed to update subscriptions' },
+        { status: 500 }
+      )
+    }
+
+    // Insert new subscriptions if any provided
+    if (subscriptions.length > 0) {
+      const subscriptionsToInsert = subscriptions.map((sub: any) => ({
+        officer_email: user.email,
+        region_id: sub.regionId,
+        school_level_id: sub.schoolLevelId,
+        created_at: new Date().toISOString()
+      }))
+
+      const { error: insertError } = await supabase
+        .from('sms1_officer_subscriptions')
+        .insert(subscriptionsToInsert)
+
+      if (insertError) {
+        console.error('Error inserting new subscriptions:', insertError)
+        return NextResponse.json(
+          { error: 'Failed to update subscriptions' },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Return the updated subscriptions with names
+    const subscriptionsWithDetails = subscriptions.map((sub: any) => {
+      const region = regions.find((r: any) => r.id === sub.regionId)
+      const schoolLevel = schoolLevels.find((sl: any) => sl.id === sub.schoolLevelId)
+      
+      return {
+        regionId: sub.regionId,
+        regionName: region?.name || 'Unknown Region',
+        schoolLevelId: sub.schoolLevelId,
+        schoolLevelName: schoolLevel?.name || 'Unknown Level'
+      }
+    })
 
     return NextResponse.json({
       message: 'Subscriptions updated successfully',
-      subscriptions: subscriptions.map(sub => {
-        const region = mockRegions.find(r => r.id === sub.regionId)
-        const schoolLevel = mockSchoolLevels.find(sl => sl.id === sub.schoolLevelId)
-        
-        return {
-          regionId: sub.regionId,
-          regionName: region?.name || 'Unknown Region',
-          schoolLevelId: sub.schoolLevelId,
-          schoolLevelName: schoolLevel?.name || 'Unknown Level'
-        }
-      })
+      subscriptions: subscriptionsWithDetails
     })
   } catch (error) {
     console.error('Error updating subscriptions:', error)

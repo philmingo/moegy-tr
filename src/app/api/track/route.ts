@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,66 +13,70 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // TODO: Get report from Supabase based on reference number
-    // For now, return mock data
-
-    const mockResults: Record<string, any> = {
-      'EDU20241001': {
-        referenceNumber: 'EDU20241001',
-        status: 'open',
-        priority: 'high',
-        school: 'Georgetown Primary School',
-        region: 'Region 4 - Demerara-Mahaica',
-        createdAt: '2024-10-21T08:30:00Z',
-        officerNotified: {
-          name: 'John Martinez',
-          title: 'Education Officer',
-          notifiedAt: '2024-10-21T08:45:00Z'
-        }
-      },
-      'EDU20241002': {
-        referenceNumber: 'EDU20241002',
-        status: 'in_progress',
-        priority: 'medium',
-        school: "Queen's College",
-        region: 'Region 4 - Demerara-Mahaica',
-        createdAt: '2024-10-20T14:15:00Z',
-        officerNotified: {
-          name: 'Maria Thompson',
-          title: 'Senior Education Officer',
-          notifiedAt: '2024-10-20T14:30:00Z'
-        }
-      },
-      'EDU20241003': {
-        referenceNumber: 'EDU20241003',
-        status: 'closed',
-        priority: 'high',
-        school: 'New Amsterdam Secondary School',
-        region: 'Region 6 - East Berbice-Corentyne',
-        createdAt: '2024-10-18T10:00:00Z',
-        officerNotified: {
-          name: 'David Wilson',
-          title: 'Education Officer',
-          notifiedAt: '2024-10-18T10:15:00Z'
-        }
-      }
-    }
-
-    const result = mockResults[referenceNumber.toUpperCase()]
+    const supabase = createAdminClient()
     
-    if (!result) {
+    // Get report from database with related data
+    const { data: report, error } = await supabase
+      .from('sms1_reports')
+      .select(`
+        *,
+        sms_schools!inner(
+          id,
+          name,
+          code,
+          sms_regions!inner(
+            id,
+            name
+          )
+        ),
+        sms1_report_assignments(
+          assigned_at,
+          sms1_users!inner(
+            id,
+            full_name,
+            role
+          )
+        )
+      `)
+      .eq('reference_number', referenceNumber)
+      .single()
+
+    if (error || !report) {
+      console.error('Report lookup error:', error)
       return NextResponse.json(
-        { error: 'Reference number not found' },
+        { error: 'Report not found' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json({ report: result })
+    // Transform the data for the frontend
+    const reportData = report as any
+    const school = reportData.sms_schools
+    const region = school?.sms_regions
+    const assignments = reportData.sms1_report_assignments || []
+    
+    const result = {
+      referenceNumber: reportData.reference_number,
+      status: reportData.status,
+      priority: reportData.priority,
+      school: school?.name,
+      region: region?.name,
+      createdAt: reportData.created_at,
+      officerNotified: assignments.length > 0 ? {
+        name: assignments[0].sms1_users?.full_name,
+        title: assignments[0].sms1_users?.role === 'admin' ? 'Administrator' : 
+              assignments[0].sms1_users?.role === 'senior_officer' ? 'Senior Education Officer' : 
+              'Education Officer',
+        notifiedAt: assignments[0].assigned_at
+      } : null
+    }
+
+    return NextResponse.json(result)
 
   } catch (error) {
-    console.error('Tracking lookup error:', error)
+    console.error('Track API error:', error)
     return NextResponse.json(
-      { error: 'An error occurred while looking up the report' },
+      { error: 'An error occurred while tracking the report' },
       { status: 500 }
     )
   }

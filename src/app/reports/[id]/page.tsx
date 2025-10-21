@@ -57,7 +57,7 @@ interface Report {
   priority: string
   createdAt: string
   updatedAt: string
-  assignedOfficer: Officer | null
+  assignedOfficers: Officer[]
   resolution?: string
   notes: Note[]
   attachments: any[]
@@ -80,7 +80,7 @@ export default function ReportDetailsPage() {
   
   // Action states
   const [selectedStatus, setSelectedStatus] = useState('')
-  const [selectedOfficer, setSelectedOfficer] = useState('')
+  const [selectedOfficers, setSelectedOfficers] = useState<string[]>([])
   const [selectedPriority, setSelectedPriority] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   
@@ -210,42 +210,50 @@ export default function ReportDetailsPage() {
     }
   }
 
-  const handleAssignOfficer = async () => {
-    if (!selectedOfficer || !report) return
+  const handleAssignOfficers = async () => {
+    if (selectedOfficers.length === 0 || !report) return
     
-    const selectedOfficerData = officers.find(o => o.id === selectedOfficer)
-    if (!selectedOfficerData) return
+    const selectedOfficerData = officers.filter(o => selectedOfficers.includes(o.id))
+    if (selectedOfficerData.length === 0) return
     
     setActionLoading(true)
     try {
       const response = await fetch(`/api/reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedOfficer: selectedOfficer })
+        body: JSON.stringify({ assignedOfficers: selectedOfficers })
       })
 
       if (response.ok) {
-        const assignedOfficer = {
-          id: selectedOfficerData.id,
-          name: selectedOfficerData.name,
-          title: selectedOfficerData.position,
-          position: selectedOfficerData.position,
-          email: selectedOfficerData.email,
-          role: selectedOfficerData.role
-        }
+        const assignedOfficers = selectedOfficerData.map(officer => ({
+          id: officer.id,
+          name: officer.name,
+          title: officer.position,
+          position: officer.position,
+          email: officer.email,
+          role: officer.role
+        }))
         
         setReport({
           ...report,
-          assignedOfficer: assignedOfficer,
+          assignedOfficers: assignedOfficers,
           updatedAt: new Date().toISOString()
         })
         setShowOfficerModal(false)
-        setSelectedOfficer('')
+        setSelectedOfficers([])
       }
     } catch (error) {
-      console.error('Error assigning officer:', error)
+      console.error('Error assigning officers:', error)
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const handleOfficerSelection = (officerId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedOfficers(prev => [...prev, officerId])
+    } else {
+      setSelectedOfficers(prev => prev.filter(id => id !== officerId))
     }
   }
 
@@ -487,12 +495,18 @@ export default function ReportDetailsPage() {
                   <label className="text-sm font-medium text-gray-500">Last Updated</label>
                   <p className="text-gray-900">{formatDate(report.updatedAt)}</p>
                 </div>
-                {report.assignedOfficer && (
+                {report.assignedOfficers.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Assigned Officer</label>
-                    <p className="text-gray-900">{report.assignedOfficer.name}</p>
-                    <p className="text-sm text-gray-600">{report.assignedOfficer.title}</p>
-                    <p className="text-sm text-gray-600">{report.assignedOfficer.email}</p>
+                    <label className="text-sm font-medium text-gray-500">Assigned Officers</label>
+                    <div className="space-y-2 mt-1">
+                      {report.assignedOfficers.map((officer, index) => (
+                        <div key={officer.id} className="border-l-2 border-blue-200 pl-3">
+                          <p className="text-gray-900 font-medium">{officer.name}</p>
+                          <p className="text-sm text-gray-600">{officer.title}</p>
+                          <p className="text-sm text-gray-600">{officer.email}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -501,23 +515,27 @@ export default function ReportDetailsPage() {
             {/* Officer Notification */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Officer Notifications</h3>
-              {report.assignedOfficer ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <User className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-blue-900">{report.assignedOfficer.name}</p>
-                      <p className="text-sm text-blue-700">{report.assignedOfficer.title}</p>
-                      <p className="text-sm text-blue-600 mt-1">
-                        Notified on {formatDate(report.timeline.find(item => item.action === 'Assigned to officer')?.timestamp || report.createdAt)}
-                      </p>
+              {report.assignedOfficers.length > 0 ? (
+                <div className="space-y-3">
+                  {report.assignedOfficers.map((officer, index) => (
+                    <div key={officer.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-start space-x-3">
+                        <User className="h-5 w-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-blue-900">{officer.name}</p>
+                          <p className="text-sm text-blue-700">{officer.title}</p>
+                          <p className="text-sm text-blue-600 mt-1">
+                            Notified on {formatDate(report.timeline.find(item => item.action === 'Assigned to officer')?.timestamp || report.createdAt)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               ) : (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-yellow-800">
-                    <strong>Status:</strong> No officer assigned yet. The report is in queue for assignment.
+                    <strong>Status:</strong> No officers assigned yet. The report is in queue for assignment.
                   </p>
                 </div>
               )}
@@ -625,41 +643,70 @@ export default function ReportDetailsPage() {
       {/* Officer Assignment Modal */}
       {showOfficerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Officer</h3>
-            <div className="space-y-3 mb-6">
-              {[
-                { id: 'officer1', name: 'John Martinez', title: 'Education Officer' },
-                { id: 'officer2', name: 'Maria Thompson', title: 'Senior Education Officer' },
-                { id: 'officer3', name: 'David Wilson', title: 'Education Officer' }
-              ].map((officer) => (
-                <label key={officer.id} className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="officer"
-                    value={officer.id}
-                    checked={selectedOfficer === officer.id}
-                    onChange={(e) => setSelectedOfficer(e.target.value)}
-                    className="text-green-600"
-                  />
-                  <div>
-                    <p className="font-medium">{officer.name}</p>
-                    <p className="text-sm text-gray-600">{officer.title}</p>
-                  </div>
-                </label>
-              ))}
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-96 overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Officers (Multiple Selection)</h3>
+            
+            {/* Search Input */}
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search officers by name, position, or email..."
+                value={officerSearch}
+                onChange={(e) => {
+                  setOfficerSearch(e.target.value)
+                  fetchOfficers(e.target.value)
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowOfficerModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignOfficer}
-                disabled={!selectedOfficer || actionLoading}
-                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg"
+
+            {loadingOfficers ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="text-gray-600 mt-2">Loading officers...</p>
+              </div>
+            ) : (
+              <div className="space-y-3 mb-6 max-h-48 overflow-y-auto">
+                {officers.length > 0 ? (
+                  officers.map((officer) => (
+                    <label key={officer.id} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-50 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedOfficers.includes(officer.id)}
+                        onChange={(e) => handleOfficerSelection(officer.id, e.target.checked)}
+                        className="text-blue-600 rounded"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{officer.name}</p>
+                        <p className="text-sm text-gray-600">{officer.title || officer.position}</p>
+                        <p className="text-xs text-gray-500">{officer.email}</p>
+                      </div>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No officers found</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                {selectedOfficers.length} officer{selectedOfficers.length !== 1 ? 's' : ''} selected
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowOfficerModal(false)
+                    setSelectedOfficers([])
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssignOfficers}
+                  disabled={selectedOfficers.length === 0 || actionLoading}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg"
               >
                 {actionLoading ? 'Assigning...' : 'Assign'}
               </button>
@@ -754,79 +801,6 @@ export default function ReportDetailsPage() {
         </div>
       )}
 
-      {/* Officer Assignment Modal */}
-      {showOfficerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Assign Officer</h3>
-            
-            {/* Search Input */}
-            <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search officers by name or position..."
-                value={officerSearch}
-                onChange={(e) => setOfficerSearch(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Officers List */}
-            <div className="max-h-64 overflow-y-auto mb-6">
-              {loadingOfficers ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
-                  <span className="ml-2 text-gray-600">Loading officers...</span>
-                </div>
-              ) : officers.length > 0 ? (
-                <div className="space-y-2">
-                  {officers.map((officer) => (
-                    <label key={officer.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="officer"
-                        value={officer.id}
-                        checked={selectedOfficer === officer.id}
-                        onChange={(e) => setSelectedOfficer(e.target.value)}
-                        className="text-green-600"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{officer.name}</div>
-                        <div className="text-sm text-gray-600">{officer.position}</div>
-                        <div className="text-xs text-gray-500">{officer.email}</div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  {officerSearch ? 'No officers found matching your search.' : 'No officers available.'}
-                </div>
-              )}
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setShowOfficerModal(false)
-                  setSelectedOfficer('')
-                  setOfficerSearch('')
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignOfficer}
-                disabled={!selectedOfficer || actionLoading}
-                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg"
-              >
-                {actionLoading ? 'Assigning...' : 'Assign'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

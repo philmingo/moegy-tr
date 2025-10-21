@@ -56,10 +56,16 @@ export default function ReportPage() {
     if (schoolSearch.trim() === '') {
       setFilteredSchools(schools)
     } else {
-      const filtered = schools.filter((school: any) =>
-        school.name.toLowerCase().includes(schoolSearch.toLowerCase()) ||
-        school.code.toLowerCase().includes(schoolSearch.toLowerCase())
-      )
+      const searchTerm = schoolSearch.toLowerCase()
+      const filtered = schools.filter((school: any) => {
+        const schoolName = school.name.toLowerCase()
+        const schoolCode = school.code.toLowerCase()
+        const combinedString = `${school.name} (${school.code})`.toLowerCase()
+        
+        return schoolName.includes(searchTerm) || 
+               schoolCode.includes(searchTerm) ||
+               combinedString.includes(searchTerm)
+      })
       setFilteredSchools(filtered)
     }
   }, [schoolSearch, schools])
@@ -219,7 +225,7 @@ export default function ReportPage() {
                   </div>
                 )}
                 
-                {formData.regionId && schoolSearch.length > 0 && filteredSchools.length === 0 && (
+                {formData.regionId && schoolSearch.trim().length > 0 && filteredSchools.length === 0 && schools.length > 0 && !formData.schoolId && (
                   <div className="text-sm text-gray-500 italic">No schools found matching your search</div>
                 )}
               </div>

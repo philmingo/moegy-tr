@@ -1,4 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+)
 
 export async function GET(
   request: NextRequest,
@@ -7,200 +19,32 @@ export async function GET(
   try {
     const { id } = await params
 
-    // TODO: Get specific report from Supabase
-    // For now, return mock data based on ID
+    // Get specific report from Supabase with all related data
+    const { data: report, error } = await supabase
+      .from('sms1_reports')
+      .select(`
+        *,
+        sms_schools (
+          id,
+          name,
+          code,
+          sms_regions (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', id)
+      .single()
 
-    const mockReports: { [key: string]: any } = {
-      '1': {
-        id: '1',
-        referenceNumber: 'EDU20241001',
-        school: { 
-          name: 'Georgetown Primary School', 
-          code: 'GPS001', 
-          region: { name: 'Region 4 - Demerara-Mahaica' },
-          address: '123 Main Street, Georgetown',
-          phone: '592-225-1234'
-        },
-        grade: 'Grade 5',
-        teacherName: 'Ms. Sarah Johnson',
-        subject: 'Mathematics',
-        reporterType: 'parent',
-        description: 'Teacher has been absent for 3 consecutive days without notice. Students are being left unattended in the classroom with no supervision or learning activities provided.',
-        status: 'open',
-        priority: 'high',
-        createdAt: '2024-10-21T08:30:00Z',
-        updatedAt: '2024-10-21T08:30:00Z',
-        assignedOfficer: null,
-        notes: [],
-        attachments: [],
-        timeline: [
-          {
-            id: '1',
-            action: 'Report submitted',
-            description: 'Initial report filed by parent',
-            timestamp: '2024-10-21T08:30:00Z',
-            officer: null
-          }
-        ]
-      },
-      '2': {
-        id: '2',
-        referenceNumber: 'EDU20241002', 
-        school: { 
-          name: "Queen's College", 
-          code: 'QC001', 
-          region: { name: 'Region 4 - Demerara-Mahaica' },
-          address: '456 Brickdam, Georgetown',
-          phone: '592-225-5678'
-        },
-        grade: 'Form 4A',
-        teacherName: 'Mr. David Williams',
-        subject: 'Physics',
-        reporterType: 'student',
-        description: 'Physics teacher frequently arrives late and leaves early. Missing important class time. This has been happening for the past 2 weeks.',
-        status: 'in_progress',
-        priority: 'medium',
-        createdAt: '2024-10-20T14:15:00Z',
-        updatedAt: '2024-10-21T09:45:00Z',
-        assignedOfficer: {
-          id: 'off001',
-          name: 'John Martinez',
-          title: 'Education Officer',
-          email: 'j.martinez@moe.gov.gy'
-        },
-        notes: [
-          {
-            id: 'note1',
-            content: 'Initial investigation started. Contacted school principal.',
-            createdAt: '2024-10-21T09:45:00Z',
-            officer: {
-              name: 'John Martinez',
-              title: 'Education Officer'
-            }
-          }
-        ],
-        attachments: [],
-        timeline: [
-          {
-            id: '1',
-            action: 'Report submitted',
-            description: 'Report filed by student',
-            timestamp: '2024-10-20T14:15:00Z',
-            officer: null
-          },
-          {
-            id: '2', 
-            action: 'Assigned to officer',
-            description: 'Case assigned to John Martinez',
-            timestamp: '2024-10-21T09:00:00Z',
-            officer: {
-              name: 'System',
-              title: 'Auto-assignment'
-            }
-          },
-          {
-            id: '3',
-            action: 'Investigation started',
-            description: 'Officer began preliminary investigation',
-            timestamp: '2024-10-21T09:45:00Z',
-            officer: {
-              name: 'John Martinez', 
-              title: 'Education Officer'
-            }
-          }
-        ]
-      },
-      '3': {
-        id: '3',
-        referenceNumber: 'EDU20241003',
-        school: { 
-          name: 'New Amsterdam Secondary School', 
-          code: 'NASS001', 
-          region: { name: 'Region 6 - East Berbice-Corentyne' },
-          address: '789 Strand Road, New Amsterdam',
-          phone: '592-333-9876'
-        },
-        grade: 'Form 2B',
-        teacherName: 'Mrs. Patricia Singh',
-        subject: 'English Literature',
-        reporterType: 'other',
-        description: 'English teacher has not shown up for the past week. No substitute provided. Students are missing critical exam preparation.',
-        status: 'closed',
-        priority: 'high',
-        createdAt: '2024-10-18T10:00:00Z',
-        updatedAt: '2024-10-21T16:30:00Z',
-        assignedOfficer: {
-          id: 'off002',
-          name: 'Maria Thompson',
-          title: 'Senior Education Officer',
-          email: 'm.thompson@moe.gov.gy'
-        },
-        resolution: 'Issue resolved. Teacher was experiencing medical emergency. Substitute teacher assigned and permanent replacement being processed.',
-        notes: [
-          {
-            id: 'note1',
-            content: 'Contacted teacher - medical emergency confirmed.',
-            createdAt: '2024-10-19T08:30:00Z',
-            officer: {
-              name: 'Maria Thompson',
-              title: 'Senior Education Officer'
-            }
-          },
-          {
-            id: 'note2',
-            content: 'Temporary substitute arranged. Permanent replacement in process.',
-            createdAt: '2024-10-21T16:30:00Z',
-            officer: {
-              name: 'Maria Thompson',
-              title: 'Senior Education Officer'
-            }
-          }
-        ],
-        attachments: [],
-        timeline: [
-          {
-            id: '1',
-            action: 'Report submitted',
-            description: 'Report filed by concerned party',
-            timestamp: '2024-10-18T10:00:00Z',
-            officer: null
-          },
-          {
-            id: '2',
-            action: 'Assigned to officer',
-            description: 'Case assigned to Maria Thompson',
-            timestamp: '2024-10-18T14:00:00Z',
-            officer: {
-              name: 'System',
-              title: 'Auto-assignment'
-            }
-          },
-          {
-            id: '3',
-            action: 'Investigation completed',
-            description: 'Root cause identified and temporary solution implemented',
-            timestamp: '2024-10-19T08:30:00Z',
-            officer: {
-              name: 'Maria Thompson',
-              title: 'Senior Education Officer'
-            }
-          },
-          {
-            id: '4',
-            action: 'Case closed',
-            description: 'Permanent solution in progress, case resolved',
-            timestamp: '2024-10-21T16:30:00Z',
-            officer: {
-              name: 'Maria Thompson',
-              title: 'Senior Education Officer'
-            }
-          }
-        ]
-      }
+    if (error) {
+      console.error('Error fetching report:', error)
+      return NextResponse.json(
+        { error: 'Report not found' },
+        { status: 404 }
+      )
     }
 
-    const report = mockReports[id]
-    
     if (!report) {
       return NextResponse.json(
         { error: 'Report not found' },
@@ -208,12 +52,51 @@ export async function GET(
       )
     }
 
-    return NextResponse.json({ report })
+    // Transform the data to match the expected frontend format
+    const transformedReport = {
+      id: report.id,
+      referenceNumber: report.reference_number,
+      school: {
+        name: report.sms_schools?.name || 'Unknown School',
+        code: report.sms_schools?.code || 'N/A',
+        region: { 
+          name: report.sms_schools?.sms_regions?.name || 'Unknown Region' 
+        },
+        address: 'Address information not available',
+        phone: 'Phone information not available'
+      },
+      grade: report.grade || 'Not specified',
+      teacherName: report.teacher_name,
+      subject: report.subject || 'Not specified',
+      reporterType: report.reporter_type,
+      description: report.description,
+      status: report.status,
+      priority: report.priority,
+      createdAt: report.created_at,
+      updatedAt: report.updated_at,
+      assignedOfficers: report.assigned_officer ? (
+        Array.isArray(JSON.parse(report.assigned_officer)) 
+          ? JSON.parse(report.assigned_officer) 
+          : [JSON.parse(report.assigned_officer)]
+      ) : [],
+      notes: [], // TODO: Implement notes system if needed
+      attachments: [], // TODO: Implement attachments if needed
+      timeline: [
+        {
+          id: '1',
+          action: 'Report submitted',
+          description: 'Initial report filed',
+          timestamp: report.created_at,
+          officer: null
+        }
+      ]
+    }
 
+    return NextResponse.json({ report: transformedReport })
   } catch (error) {
-    console.error('Report fetch error:', error)
+    console.error('Error in report details API:', error)
     return NextResponse.json(
-      { error: 'An error occurred while fetching the report' },
+      { error: 'Failed to fetch report details' },
       { status: 500 }
     )
   }
@@ -226,10 +109,34 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { status, priority, notes, assignedOfficer } = body
+    const { status, priority, notes, assignedOfficers, assignedOfficer } = body
 
-    // TODO: Update report in Supabase
-    // For now, return success response
+    // Build the update object
+    const updateData: any = {}
+    
+    if (status !== undefined) updateData.status = status
+    if (priority !== undefined) updateData.priority = priority
+    if (assignedOfficers !== undefined) {
+      updateData.assigned_officer = assignedOfficers && assignedOfficers.length > 0 ? JSON.stringify(assignedOfficers) : null
+    } else if (assignedOfficer !== undefined) {
+      // Backward compatibility for single officer assignment
+      updateData.assigned_officer = assignedOfficer ? JSON.stringify([assignedOfficer]) : null
+    }
+    updateData.updated_at = new Date().toISOString()
+
+    // Update report in Supabase
+    const { error } = await supabase
+      .from('sms1_reports')
+      .update(updateData)
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error updating report:', error)
+      return NextResponse.json(
+        { error: 'Failed to update report' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       success: true,

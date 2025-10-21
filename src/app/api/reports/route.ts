@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -141,33 +142,56 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate reference number (mock)
-    const currentYear = new Date().getFullYear()
-    const randomNum = Math.floor(Math.random() * 9000) + 1000
-    const referenceNumber = `EDU${currentYear}${randomNum}`
+    // Generate reference number using database function
+    const supabase = createAdminClient()
+    
+    // Insert the report into the database
+    const { data: newReport, error: insertError } = await supabase
+      .from('sms1_reports')
+      .insert({
+        reference_number: `EDU${new Date().getFullYear()}${String(Math.floor(Math.random() * 9000) + 1000)}`,
+        school_id: schoolId,
+        grade,
+        teacher_name: teacherName,
+        subject,
+        reporter_type: reporterType as 'student' | 'parent' | 'other',
+        description,
+        status: 'open' as const,
+        priority: 'medium' as const
+      } as any)
+      .select('*')
+      .single()
 
-    // TODO: Save report to Supabase
+    if (insertError) {
+      console.error('Database error creating report:', insertError)
+      return NextResponse.json(
+        { error: 'Failed to create report in database' },
+        { status: 500 }
+      )
+    }
+
+    // Type assertion for the returned report
+    const report = newReport as any
+
     // TODO: Auto-assign to officers based on region and school level
     // TODO: Send email notifications
 
-    const mockReport = {
-      id: `report-${Date.now()}`,
-      referenceNumber,
-      schoolId,
-      grade,
-      teacherName,
-      subject,
-      reporterType,
-      description,
-      status: 'open',
-      priority: 'medium',
-      createdAt: new Date().toISOString()
-    }
-
     return NextResponse.json({
       message: 'Report submitted successfully',
-      referenceNumber,
-      report: mockReport
+      referenceNumber: report.reference_number,
+      report: {
+        id: report.id,
+        referenceNumber: report.reference_number,
+        schoolId: report.school_id,
+        grade: report.grade,
+        teacherName: report.teacher_name,
+        subject: report.subject,
+        reporterType: report.reporter_type,
+        description: report.description,
+        status: report.status,
+        priority: report.priority,
+        createdAt: report.created_at
+      }
     })
 
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { emailOperations, passwordOperations, sessionOperations } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase'
 import { cookies } from 'next/headers'
 
 export async function POST(request: NextRequest) {
@@ -17,45 +18,74 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = emailOperations.normalize(email)
 
-    // TODO: Get user from database using Supabase
-    // For now, create mock user for development
-    
-    // Mock default admin user for development
-    if (normalizedEmail === 'phil.mingo@moe.gov.gy' && password === 'Admin@123456789') {
-      const mockUser = {
-        id: '00000000-0000-0000-0000-000000000001',
-        email: normalizedEmail,
-        full_name: 'Philip Mingo',
-        role: 'admin' as const,
-        is_approved: true,
-        is_verified: true
-      }
+    // Get user from database
+    const supabase = createAdminClient()
+    const { data: user, error } = await supabase
+      .from('sms1_users')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .is('deleted_at', null)
+      .single()
 
-      // Create session
-      const session = sessionOperations.createSession(mockUser)
-      
-      // Set HTTP-only cookie
-      const cookieStore = await cookies()
-      cookieStore.set('auth-token', session.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 // 24 hours
-      })
-
-      return NextResponse.json({
-        message: 'Login successful',
-        user: session.user
-      })
+    if (error || !user) {
+      console.error('User lookup error:', error)
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      )
     }
 
-    // TODO: Verify password with database hash
-    // TODO: Check if user is approved and verified
+    // Type assertion for user object
+    const authenticatedUser = user as any
 
-    return NextResponse.json(
-      { error: 'Invalid credentials or account not approved' },
-      { status: 401 }
-    )
+    // Verify password
+    const isValidPassword = await passwordOperations.verify(password, authenticatedUser.password_hash)
+    
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      )
+    }
+
+    // Check if user is approved and verified
+    if (!authenticatedUser.is_approved) {
+      return NextResponse.json(
+        { error: 'Your account is pending approval. Please contact an administrator.' },
+        { status: 403 }
+      )
+    }
+
+    if (!authenticatedUser.is_verified) {
+      return NextResponse.json(
+        { error: 'Please verify your email address before logging in.' },
+        { status: 403 }
+      )
+    }
+
+    // Create session
+    const session = sessionOperations.createSession({
+      id: authenticatedUser.id,
+      email: authenticatedUser.email,
+      full_name: authenticatedUser.full_name,
+      role: authenticatedUser.role,
+      is_approved: authenticatedUser.is_approved,
+      is_verified: authenticatedUser.is_verified
+    })
+    
+    // Set HTTP-only cookie
+    const cookieStore = await cookies()
+    cookieStore.set('auth-token', session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 // 24 hours
+    })
+
+    return NextResponse.json({
+      message: 'Login successful',
+      user: session.user
+    })
 
   } catch (error) {
     console.error('Login error:', error)

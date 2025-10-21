@@ -5,29 +5,29 @@ export async function GET() {
   try {
     const supabase = createAdminClient()
     
-    // Get regions from the database
-    const { data: regions, error } = await supabase
-      .from('sms_regions')
+    // Get school levels from the database
+    const { data: schoolLevels, error } = await supabase
+      .from('sms_school_levels')
       .select('id, name')
       .is('deleted_at', null)
       .order('name')
 
     if (error) {
-      console.error('Database error fetching regions:', error)
+      console.error('Database error fetching school levels:', error)
       return NextResponse.json(
-        { error: 'Failed to fetch regions from database' },
+        { error: 'Failed to fetch school levels from database' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
-      regions: regions || []
+      schoolLevels: schoolLevels || []
     })
 
   } catch (error) {
-    console.error('Regions API error:', error)
+    console.error('School levels API error:', error)
     return NextResponse.json(
-      { error: 'An error occurred while fetching regions' },
+      { error: 'An error occurred while fetching school levels' },
       { status: 500 }
     )
   }

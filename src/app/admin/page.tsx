@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -120,9 +121,9 @@ export default function AdminPage() {
         </form>
 
         <div className="mt-6 text-center">
-          <a href="#" className="text-sm text-primary-600 hover:text-primary-700">
+          <Link href="/admin/forgot-password" className="text-sm text-primary-600 hover:text-primary-700">
             Forgot your password?
-          </a>
+          </Link>
         </div>
 
         <div className="mt-4 text-center">
