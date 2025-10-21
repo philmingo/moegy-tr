@@ -1,0 +1,201 @@
+import { createAdminClient } from './supabase'
+
+// Simplified database operations
+// These will be typed properly once Supabase is configured
+
+export const reportOperations = {
+  // Create a new report
+  async create(reportData: any) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_reports')
+      .insert(reportData)
+      .select(`
+        *,
+        school:sms_schools(
+          name,
+          code,
+          region:sms_regions(name),
+          school_level:sms_school_levels(name)
+        )
+      `)
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get reports with filters
+  async getReports(filters: any = {}) {
+    const supabase = createAdminClient()
+    
+    let query = supabase
+      .from('sms1_reports')
+      .select(`
+        *,
+        school:sms_schools(
+          name,
+          code,
+          region:sms_regions(name),
+          school_level:sms_school_levels(name)
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (filters.status && filters.status.length > 0) {
+      query = query.in('status', filters.status)
+    }
+
+    if (filters.limit) {
+      query = query.limit(filters.limit)
+    }
+
+    const { data, error } = await query
+    
+    if (error) throw error
+    return data
+  },
+
+  // Update report status
+  async updateStatus(reportId: string, status: string, userId?: string) {
+    const supabase = createAdminClient()
+    
+    const updateData = { 
+      status,
+      updated_at: new Date().toISOString(),
+      ...(status === 'closed' && userId ? {
+        closed_by: userId,
+        closed_at: new Date().toISOString()
+      } : {})
+    } as any
+
+    const { data, error } = await supabase
+      .from('sms1_reports')
+      .update(updateData)
+      .eq('id', reportId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  }
+}
+
+// User operations
+export const userOperations = {
+  // Create new user
+  async create(userData: any) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_users')
+      .insert(userData)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get user by email
+  async getByEmail(email: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_users')
+      .select('*')
+      .eq('email', email)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return data
+  }
+}
+
+// Reference data operations
+export const referenceOperations = {
+  // Get all regions
+  async getRegions() {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms_regions')
+      .select('*')
+      .is('deleted_at', null)
+      .order('name')
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get all school levels
+  async getSchoolLevels() {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms_school_levels')
+      .select('*')
+      .is('deleted_at', null)
+      .order('name')
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get schools by region
+  async getSchoolsByRegion(regionId: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms_schools')
+      .select(`
+        *,
+        school_level:sms_school_levels(name)
+      `)
+      .eq('region_id', regionId)
+      .is('deleted_at', null)
+      .order('name')
+    
+    if (error) throw error
+    return data
+  }
+}
+
+// OTP operations
+export const otpOperations = {
+  // Create OTP code
+  async create(email: string, code: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_otp_codes')
+      .insert({
+        email,
+        code,
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Verify OTP code
+  async verify(email: string, code: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_otp_codes')
+      .select('*')
+      .eq('email', email)
+      .eq('code', code)
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return !!data
+  }
+}

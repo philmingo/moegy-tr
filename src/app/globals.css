@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Remove any default Next.js branding */
+.next-logo,
+[data-testid="next-logo"] {
+  display: none !important;
+}
+
+/* Custom base styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+/* Remove any default margins/padding from Next.js */
+* {
+  box-sizing: border-box;
+}
+
+/* Ensure proper focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}

@@ -1,0 +1,327 @@
+import { createAdminClient } from './supabase'
+
+// Simplified database operations without complex types for now
+// We'll refine types once Supabase is properly configured
+
+// Report operations
+export const reportOperations = {
+  // Create a new report
+  async create(reportData: Omit<Tables['sms1_reports']['Insert'], 'reference_number'>) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_reports')
+      .insert(reportData)
+      .select(`
+        *,
+        school:sms_schools(
+          name,
+          code,
+          region:sms_regions(name),
+          school_level:sms_school_levels(name)
+        )
+      `)
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get reports with filters
+  async getReports(filters: {
+    status?: string[]
+    region_id?: string
+    school_level_id?: string
+    officer_id?: string
+    limit?: number
+    offset?: number
+  } = {}) {
+    const supabase = createAdminClient()
+    
+    let query = supabase
+      .from('sms1_reports')
+      .select(`
+        *,
+        school:sms_schools(
+          name,
+          code,
+          region:sms_regions(name),
+          school_level:sms_school_levels(name)
+        ),
+        assignments:sms1_report_assignments(
+          officer:sms1_users(full_name, email)
+        ),
+        comments:sms1_report_comments(
+          id,
+          comment,
+          created_at,
+          user:sms1_users(full_name)
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (filters.status && filters.status.length > 0) {
+      query = query.in('status', filters.status)
+    }
+
+    if (filters.officer_id) {
+      query = query.in('id', 
+        supabase
+          .from('sms1_report_assignments')
+          .select('report_id')
+          .eq('officer_id', filters.officer_id)
+          .is('removed_at', null)
+      )
+    }
+
+    if (filters.limit) {
+      query = query.limit(filters.limit)
+    }
+
+    if (filters.offset) {
+      query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1)
+    }
+
+    const { data, error } = await query
+    
+    if (error) throw error
+    return data
+  },
+
+  // Update report status
+  async updateStatus(reportId: string, status: 'open' | 'in_progress' | 'closed', userId?: string) {
+    const supabase = createAdminClient()
+    
+    const updateData: any = { 
+      status,
+      updated_at: new Date().toISOString()
+    }
+    
+    if (status === 'closed' && userId) {
+      updateData.closed_by = userId
+      updateData.closed_at = new Date().toISOString()
+    } else if (status !== 'closed') {
+      updateData.closed_by = null
+      updateData.closed_at = null
+    }
+
+    const { data, error } = await supabase
+      .from('sms1_reports')
+      .update(updateData)
+      .eq('id', reportId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Auto-assign report to officers
+  async autoAssignReport(reportId: string, schoolId: string) {
+    const supabase = createAdminClient()
+    
+    // First get the school's region and level
+    const { data: school, error: schoolError } = await supabase
+      .from('sms_schools')
+      .select('region_id, school_level_id')
+      .eq('id', schoolId)
+      .single()
+    
+    if (schoolError) throw schoolError
+
+    // Find officers subscribed to this region and school level
+    const { data: subscriptions, error: subError } = await supabase
+      .from('sms1_officer_subscriptions')
+      .select('officer_id, officer:sms1_users(id, email, full_name)')
+      .eq('region_id', school.region_id)
+      .eq('school_level_id', school.school_level_id)
+      .is('deleted_at', null)
+      .eq('officer.is_approved', true)
+    
+    if (subError) throw subError
+
+    // Create assignments
+    const assignments = subscriptions.map(sub => ({
+      report_id: reportId,
+      officer_id: sub.officer_id,
+      assigned_by: '00000000-0000-0000-0000-000000000000' // System assignment
+    }))
+
+    if (assignments.length > 0) {
+      const { error: assignError } = await supabase
+        .from('sms1_report_assignments')
+        .insert(assignments)
+      
+      if (assignError) throw assignError
+    }
+
+    return subscriptions.map(sub => sub.officer)
+  }
+}
+
+// User operations
+export const userOperations = {
+  // Create new user
+  async create(userData: Tables['sms1_users']['Insert']) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_users')
+      .insert(userData)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get user by email
+  async getByEmail(email: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_users')
+      .select('*')
+      .eq('email', email)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return data
+  },
+
+  // Update user approval status
+  async updateApproval(userId: string, isApproved: boolean) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_users')
+      .update({ is_approved: isApproved })
+      .eq('id', userId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get officer subscriptions
+  async getSubscriptions(officerId: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_officer_subscriptions')
+      .select(`
+        *,
+        region:sms_regions(id, name),
+        school_level:sms_school_levels(id, name)
+      `)
+      .eq('officer_id', officerId)
+      .is('deleted_at', null)
+    
+    if (error) throw error
+    return data
+  }
+}
+
+// Reference data operations
+export const referenceOperations = {
+  // Get all regions
+  async getRegions() {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms_regions')
+      .select('*')
+      .is('deleted_at', null)
+      .order('name')
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get all school levels
+  async getSchoolLevels() {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms_school_levels')
+      .select('*')
+      .is('deleted_at', null)
+      .order('name')
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get schools by region
+  async getSchoolsByRegion(regionId: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms_schools')
+      .select(`
+        *,
+        school_level:sms_school_levels(name)
+      `)
+      .eq('region_id', regionId)
+      .is('deleted_at', null)
+      .order('name')
+    
+    if (error) throw error
+    return data
+  }
+}
+
+// OTP operations
+export const otpOperations = {
+  // Create OTP code
+  async create(email: string, code: string) {
+    const supabase = createAdminClient()
+    
+    // Delete existing unused OTPs for this email
+    await supabase
+      .from('sms1_otp_codes')
+      .delete()
+      .eq('email', email)
+      .is('used_at', null)
+
+    const { data, error } = await supabase
+      .from('sms1_otp_codes')
+      .insert({
+        email,
+        code,
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Verify OTP code
+  async verify(email: string, code: string) {
+    const supabase = createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('sms1_otp_codes')
+      .select('*')
+      .eq('email', email)
+      .eq('code', code)
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    
+    if (data) {
+      // Mark as used
+      await supabase
+        .from('sms1_otp_codes')
+        .update({ used_at: new Date().toISOString() })
+        .eq('id', data.id)
+    }
+    
+    return !!data
+  }
+}
