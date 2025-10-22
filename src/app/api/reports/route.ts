@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { cookies } from 'next/headers'
+import { jwtOperations } from '@/lib/auth'
 
 interface DatabaseReport {
   id: string
@@ -16,10 +18,21 @@ interface DatabaseReport {
   sms_schools: {
     name: string
     code: string
+    school_level_id: string
     sms_regions: {
+      id: string
       name: string
     }
   }
+}
+
+interface OfficerSubscription {
+  region_id: string
+  school_level_id: string
+}
+
+interface ReportAssignment {
+  report_id: string
 }
 
 export async function GET(request: NextRequest) {
@@ -30,9 +43,28 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
 
+    // Get user authentication
+    const cookieStore = await cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const userData = jwtOperations.verify(authToken)
+    if (!userData) {
+      return NextResponse.json(
+        { error: 'Invalid authentication' },
+        { status: 401 }
+      )
+    }
+
     const supabase = createAdminClient()
 
-    // Build the query
+    // Build the base query
     let query = supabase
       .from('sms1_reports')
       .select(`
@@ -50,14 +82,89 @@ export async function GET(request: NextRequest) {
         sms_schools!inner (
           name,
           code,
+          school_level_id,
           sms_regions!inner (
+            id,
             name
           )
         )
       `)
       .order('created_at', { ascending: false })
 
-    // Apply filters
+    // Apply role-based filtering
+    if (userData.role === 'officer') {
+      // For officers, get all report IDs they should have access to
+      const accessibleReportIds = new Set<string>()
+
+      // Get reports assigned directly to this officer
+      const { data: assignments, error: assignError } = await supabase
+        .from('sms1_report_assignments')
+        .select('report_id')
+        .eq('officer_id', userData.userId)
+        .is('removed_at', null)
+
+      if (assignError) {
+        console.error('Error fetching assignments:', assignError)
+        return NextResponse.json(
+          { error: 'Failed to fetch user assignments' },
+          { status: 500 }
+        )
+      }
+
+      // Add assigned report IDs
+      if (assignments) {
+        assignments.forEach(assignment => {
+          accessibleReportIds.add((assignment as ReportAssignment).report_id)
+        })
+      }
+
+      // Get officer's subscriptions (region + school level combinations)
+      const { data: subscriptions, error: subError } = await supabase
+        .from('sms1_officer_subscriptions')
+        .select('region_id, school_level_id')
+        .eq('officer_id', userData.userId)
+        .is('deleted_at', null)
+
+      if (subError) {
+        console.error('Error fetching subscriptions:', subError)
+        return NextResponse.json(
+          { error: 'Failed to fetch user subscriptions' },
+          { status: 500 }
+        )
+      }
+
+      // Get reports that match subscriptions
+      if (subscriptions && subscriptions.length > 0) {
+        for (const subscription of subscriptions as OfficerSubscription[]) {
+          const { data: matchingReports, error: matchError } = await supabase
+            .from('sms1_reports')
+            .select('id')
+            .eq('sms_schools.region_id', subscription.region_id)
+            .eq('sms_schools.school_level_id', subscription.school_level_id)
+
+          if (!matchError && matchingReports) {
+            (matchingReports as { id: string }[]).forEach(report => {
+              accessibleReportIds.add(report.id)
+            })
+          }
+        }
+      }
+
+      // If no accessible reports, return empty result
+      if (accessibleReportIds.size === 0) {
+        return NextResponse.json({
+          reports: [],
+          total: 0,
+          hasMore: false
+        })
+      }
+
+      // Filter query to only accessible reports
+      query = query.in('id', Array.from(accessibleReportIds))
+    }
+    // For senior_officer and admin roles, show all reports (no additional filtering)
+
+    // Apply additional filters
     if (status) {
       query = query.eq('status', status)
     }
@@ -70,7 +177,56 @@ export async function GET(request: NextRequest) {
       .from('sms1_reports')
       .select('*', { count: 'exact', head: true })
 
-    // Apply same filters to count query
+    // Apply same role-based filtering to count query
+    if (userData.role === 'officer') {
+      // Use the same accessible report IDs for counting
+      const accessibleReportIds = new Set<string>()
+
+      // Get assignments
+      const { data: assignments } = await supabase
+        .from('sms1_report_assignments')
+        .select('report_id')
+        .eq('officer_id', userData.userId)
+        .is('removed_at', null)
+
+      if (assignments) {
+        assignments.forEach(assignment => {
+          accessibleReportIds.add((assignment as ReportAssignment).report_id)
+        })
+      }
+
+      // Get subscriptions
+      const { data: subscriptions } = await supabase
+        .from('sms1_officer_subscriptions')
+        .select('region_id, school_level_id')
+        .eq('officer_id', userData.userId)
+        .is('deleted_at', null)
+
+      if (subscriptions && subscriptions.length > 0) {
+        for (const subscription of subscriptions as OfficerSubscription[]) {
+          const { data: matchingReports } = await supabase
+            .from('sms1_reports')
+            .select('id')
+            .eq('sms_schools.region_id', subscription.region_id)
+            .eq('sms_schools.school_level_id', subscription.school_level_id)
+
+          if (matchingReports) {
+            (matchingReports as { id: string }[]).forEach(report => {
+              accessibleReportIds.add(report.id)
+            })
+          }
+        }
+      }
+
+      if (accessibleReportIds.size > 0) {
+        countQuery = countQuery.in('id', Array.from(accessibleReportIds))
+      } else {
+        // No accessible reports
+        countQuery = countQuery.eq('id', 'no-reports-match')
+      }
+    }
+
+    // Apply same additional filters to count query
     if (status) {
       countQuery = countQuery.eq('status', status)
     }

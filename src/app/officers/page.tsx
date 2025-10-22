@@ -29,6 +29,9 @@ export default function OfficersPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
 
   // Form states
   const [newOfficer, setNewOfficer] = useState({
@@ -41,7 +44,7 @@ export default function OfficersPage() {
 
   useEffect(() => {
     checkAuthAndLoadData()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -97,7 +100,7 @@ export default function OfficersPage() {
       if (user) loadOfficers()
     }, 300)
     return () => clearTimeout(debounce)
-  }, [searchTerm, roleFilter])
+  }, [searchTerm, roleFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddOfficer = async () => {
     try {
@@ -166,6 +169,53 @@ export default function OfficersPage() {
       }
     } catch (error) {
       console.error('Error deleting officer:', error)
+    }
+  }
+
+  const handleResetPassword = async () => {
+    if (!selectedOfficer) return
+
+    // Validate passwords
+    if (!newPassword || !confirmPassword) {
+      setPasswordError('Please fill in all password fields')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters long')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/officers/manage/${selectedOfficer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          password: newPassword
+        })
+      })
+
+      if (response.ok) {
+        setShowPasswordModal(false)
+        setSelectedOfficer(null)
+        setNewPassword('')
+        setConfirmPassword('')
+        setPasswordError('')
+        // Show success message (you could add a toast notification here)
+        alert('Password reset successfully!')
+      } else {
+        const errorData = await response.json()
+        setPasswordError(errorData.error || 'Failed to reset password')
+      }
+    } catch (error) {
+      console.error('Error resetting password:', error)
+      setPasswordError('Failed to reset password')
     }
   }
 
@@ -309,41 +359,43 @@ export default function OfficersPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {officer.subscription_count || 0} regions
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedOfficer(officer)
-                          setShowEditModal(true)
-                        }}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Edit Officer"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedOfficer(officer)
-                          setShowPasswordModal(true)
-                        }}
-                        className="text-yellow-600 hover:text-yellow-900"
-                        title="Reset Password"
-                      >
-                        <Key className="h-4 w-4" />
-                      </button>
-                      <Link
-                        href={`/officers/${officer.id}/subscriptions`}
-                        className="text-green-600 hover:text-green-900"
-                        title="Manage Subscriptions"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </Link>
-                      <button
-                        onClick={() => handleDeleteOfficer(officer)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Delete Officer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => {
+                            setSelectedOfficer(officer)
+                            setShowEditModal(true)
+                          }}
+                          className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit Officer"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedOfficer(officer)
+                            setShowPasswordModal(true)
+                          }}
+                          className="p-2 text-yellow-600 hover:text-yellow-900 hover:bg-yellow-50 rounded-lg transition-colors"
+                          title="Reset Password"
+                        >
+                          <Key className="h-4 w-4" />
+                        </button>
+                        <Link
+                          href={`/officers/${officer.id}/subscriptions`}
+                          className="p-2 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-lg transition-colors inline-block"
+                          title="Manage Subscriptions"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteOfficer(officer)}
+                          className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete Officer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -501,6 +553,73 @@ export default function OfficersPage() {
                 className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg"
               >
                 Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showPasswordModal && selectedOfficer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reset Password</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Reset password for <strong>{selectedOfficer.full_name || selectedOfficer.email}</strong>
+            </p>
+            
+            {passwordError && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {passwordError}
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value)
+                    setPasswordError('')
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Enter new password (min 8 characters)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value)
+                    setPasswordError('')
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Confirm new password"
+                />
+              </div>
+            </div>
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false)
+                  setSelectedOfficer(null)
+                  setNewPassword('')
+                  setConfirmPassword('')
+                  setPasswordError('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg"
+              >
+                Reset Password
               </button>
             </div>
           </div>

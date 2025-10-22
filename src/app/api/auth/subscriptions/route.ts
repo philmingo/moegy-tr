@@ -22,7 +22,7 @@ async function fetchRegions() {
       .order('name')
 
     if (error) throw error
-    return data
+    return data || []
   } catch (error) {
     console.error('Error fetching regions:', error)
     return []
@@ -37,7 +37,7 @@ async function fetchSchoolLevels() {
       .order('name')
 
     if (error) throw error
-    return data
+    return data || []
   } catch (error) {
     console.error('Error fetching school levels:', error)
     return []
@@ -71,8 +71,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('Authenticated user for subscriptions:', user) // Debug log
-
     // Fetch available regions and school levels from database
     const [regions, schoolLevels] = await Promise.all([
       fetchRegions(),
@@ -94,7 +92,8 @@ export async function GET(request: NextRequest) {
           name
         )
       `)
-      .eq('officer_email', user.email)
+      .eq('officer_id', user.userId)
+      .is('deleted_at', null)
 
     if (subscriptionsError) {
       console.error('Error fetching user subscriptions:', subscriptionsError)
@@ -154,6 +153,21 @@ export async function POST(request: NextRequest) {
       fetchRegions(),
       fetchSchoolLevels()
     ])
+    
+    // Check if we have required data
+    if (regions.length === 0) {
+      return NextResponse.json(
+        { error: 'No regions available in the system' },
+        { status: 500 }
+      )
+    }
+    
+    if (schoolLevels.length === 0) {
+      return NextResponse.json(
+        { error: 'No school levels available in the system' },
+        { status: 500 }
+      )
+    }
 
     // Validate subscription data
     for (const sub of subscriptions) {
@@ -164,22 +178,26 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      const regionExists = regions.find((r: any) => r.id === sub.regionId)
-      const schoolLevelExists = schoolLevels.find((sl: any) => sl.id === sub.schoolLevelId)
+      // Convert to string for comparison if needed
+      const regionId = String(sub.regionId)
+      const schoolLevelId = String(sub.schoolLevelId)
+      
+      const regionExists = regions.find((r: any) => String(r.id) === regionId)
+      const schoolLevelExists = schoolLevels.find((sl: any) => String(sl.id) === schoolLevelId)
       
       if (!regionExists || !schoolLevelExists) {
         return NextResponse.json(
-          { error: 'Invalid region or school level ID' },
+          { error: `Invalid region (${regionId}) or school level (${schoolLevelId}) ID` },
           { status: 400 }
         )
       }
     }
 
-    // Delete existing subscriptions for this user
+    // Hard delete existing subscriptions for this user (since unique constraint doesn't work with soft deletes)
     const { error: deleteError } = await supabase
       .from('sms1_officer_subscriptions')
       .delete()
-      .eq('officer_email', user.email)
+      .eq('officer_id', user.userId)
 
     if (deleteError) {
       console.error('Error deleting existing subscriptions:', deleteError)
@@ -192,7 +210,7 @@ export async function POST(request: NextRequest) {
     // Insert new subscriptions if any provided
     if (subscriptions.length > 0) {
       const subscriptionsToInsert = subscriptions.map((sub: any) => ({
-        officer_email: user.email,
+        officer_id: user.userId,
         region_id: sub.regionId,
         school_level_id: sub.schoolLevelId,
         created_at: new Date().toISOString()

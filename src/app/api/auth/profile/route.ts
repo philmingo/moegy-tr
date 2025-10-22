@@ -3,51 +3,32 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { passwordOperations } from '@/lib/auth'
+import { createClient } from '@supabase/supabase-js'
 
-// Mock user data (in real app, this would be from database)
-const mockUsers = [
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
-    id: 'admin1',
-    email: 'phil.mingo@moe.gov.gy',
-    passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewreZhh8YJrHiFPa', // Admin@123456789
-    fullName: 'Phil Mingo',
-    position: 'System Administrator',
-    role: 'admin',
-    isApproved: true,
-    isVerified: true,
-    createdAt: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: 'officer1',
-    email: 'j.martinez@moe.gov.gy',
-    passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewreZhh8YJrHiFPa',
-    fullName: 'John Martinez',
-    position: 'Education Officer',
-    role: 'officer',
-    isApproved: true,
-    isVerified: true,
-    createdAt: '2024-01-01T00:00:00Z'
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
   }
-]
+)
 
 async function getAuthenticatedUser(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('auth-token')
 
-    console.log('Cookie found:', !!token) // Debug log
-
     if (!token) {
       return null
     }
-
-    console.log('Token value:', token.value.substring(0, 20) + '...') // Debug log (partial)
     
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key') as any
-    console.log('Decoded token:', decoded) // Debug log
     return decoded
   } catch (error) {
-    console.error('Auth error:', error) // Debug log
+    console.error('Auth error:', error)
     return null
   }
 }
@@ -63,11 +44,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('Authenticated user:', user) // Debug log
+    // Fetch user profile from database
+    const { data: userProfile, error } = await supabase
+      .from('sms1_users')
+      .select('*')
+      .eq('id', user.userId)
+      .single()
     
-    const userProfile = mockUsers.find(u => u.email === user.email)
-    
-    if (!userProfile) {
+    if (error || !userProfile) {
+      console.error('Database error:', error)
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -78,12 +63,12 @@ export async function GET(request: NextRequest) {
       profile: {
         id: userProfile.id,
         email: userProfile.email,
-        fullName: userProfile.fullName,
+        fullName: userProfile.full_name,
         position: userProfile.position,
         role: userProfile.role,
-        isApproved: userProfile.isApproved,
-        isVerified: userProfile.isVerified,
-        createdAt: userProfile.createdAt
+        isApproved: userProfile.is_approved,
+        isVerified: userProfile.is_verified,
+        createdAt: userProfile.created_at
       }
     })
   } catch (error) {
@@ -117,13 +102,26 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const userProfile = mockUsers.find(u => u.email === user.email)
+    // Fetch current user profile from database
+    const { data: userProfile, error: fetchError } = await supabase
+      .from('sms1_users')
+      .select('*')
+      .eq('id', user.userId)
+      .single()
     
-    if (!userProfile) {
+    if (fetchError || !userProfile) {
+      console.error('Database error:', fetchError)
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
       )
+    }
+
+    // Prepare update data
+    const updateData: any = {
+      full_name: fullName,
+      position: position,
+      updated_at: new Date().toISOString()
     }
 
     // If changing password, validate current password and new password
@@ -135,7 +133,7 @@ export async function PATCH(request: NextRequest) {
         )
       }
 
-      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, userProfile.passwordHash)
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, userProfile.password_hash)
       if (!isCurrentPasswordValid) {
         return NextResponse.json(
           { error: 'Current password is incorrect' },
@@ -153,24 +151,36 @@ export async function PATCH(request: NextRequest) {
 
       // Hash new password
       const newPasswordHash = await passwordOperations.hash(newPassword)
-      userProfile.passwordHash = newPasswordHash
+      updateData.password_hash = newPasswordHash
     }
 
-    // Update user profile
-    userProfile.fullName = fullName
-    userProfile.position = position
+    // Update user profile in database
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('sms1_users')
+      .update(updateData)
+      .eq('id', user.userId)
+      .select('*')
+      .single()
+
+    if (updateError) {
+      console.error('Update error:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update profile' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       message: 'Profile updated successfully',
       profile: {
-        id: userProfile.id,
-        email: userProfile.email,
-        fullName: userProfile.fullName,
-        position: userProfile.position,
-        role: userProfile.role,
-        isApproved: userProfile.isApproved,
-        isVerified: userProfile.isVerified,
-        createdAt: userProfile.createdAt
+        id: updatedProfile.id,
+        email: updatedProfile.email,
+        fullName: updatedProfile.full_name,
+        position: updatedProfile.position,
+        role: updatedProfile.role,
+        isApproved: updatedProfile.is_approved,
+        isVerified: updatedProfile.is_verified,
+        createdAt: updatedProfile.created_at
       }
     })
   } catch (error) {

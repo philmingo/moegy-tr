@@ -164,6 +164,33 @@ export async function POST(
       )
     }
 
+    // Validate that region and school level exist
+    const { data: region, error: regionError } = await supabase
+      .from('sms_regions')
+      .select('id')
+      .eq('id', regionId)
+      .single()
+
+    if (regionError || !region) {
+      return NextResponse.json(
+        { error: 'Invalid region or school level ID' },
+        { status: 400 }
+      )
+    }
+
+    const { data: schoolLevel, error: schoolLevelError } = await supabase
+      .from('sms_school_levels')
+      .select('id')
+      .eq('id', schoolLevelId)
+      .single()
+
+    if (schoolLevelError || !schoolLevel) {
+      return NextResponse.json(
+        { error: 'Invalid region or school level ID' },
+        { status: 400 }
+      )
+    }
+
     // Check if subscription already exists
     const { data: existing } = await supabase
       .from('sms1_officer_subscriptions')

@@ -640,20 +640,29 @@ export default function ProfilePage() {
                   ) : (
                     <div className="space-y-3">
                       {subscriptions.length > 0 ? (
-                        subscriptions.map((subscription, index) => (
-                          <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div className="flex items-center space-x-4">
-                              <div className="flex items-center text-gray-700">
-                                <MapPin className="w-4 h-4 mr-2 text-primary-600" />
-                                <span className="font-medium">{subscription.regionName}</span>
-                              </div>
-                              <div className="flex items-center text-gray-700">
-                                <GraduationCap className="w-4 h-4 mr-2 text-primary-600" />
-                                <span>{subscription.schoolLevelName}</span>
+                        (() => {
+                          // Group subscriptions by region
+                          const groupedSubscriptions = subscriptions.reduce((acc, subscription) => {
+                            const regionName = subscription.regionName
+                            if (!acc[regionName]) {
+                              acc[regionName] = []
+                            }
+                            acc[regionName].push(subscription.schoolLevelName)
+                            return acc
+                          }, {} as Record<string, string[]>)
+
+                          return Object.entries(groupedSubscriptions).map(([regionName, schoolLevels], index) => (
+                            <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                              <div className="flex items-center space-x-3">
+                                <MapPin className="w-4 h-4 text-primary-600 flex-shrink-0" />
+                                <div className="text-gray-700">
+                                  <span className="font-medium">{regionName}:</span>{' '}
+                                  <span>{schoolLevels.join(', ')}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          ))
+                        })()
                       ) : (
                         <div className="text-center py-8 text-gray-500">
                           <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />

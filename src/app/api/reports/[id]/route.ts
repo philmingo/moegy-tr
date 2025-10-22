@@ -64,6 +64,28 @@ export async function GET(
       )
     }
 
+    // Get notes for this report
+    const { data: notes, error: notesError } = await supabase
+      .from('sms1_report_comments')
+      .select(`
+        id,
+        comment,
+        created_at,
+        user_id,
+        sms1_users (
+          id,
+          full_name,
+          position
+        )
+      `)
+      .eq('report_id', id)
+      .order('created_at', { ascending: true })
+
+    if (notesError) {
+      console.error('Error fetching notes:', notesError)
+      // Don't fail the request if notes can't be fetched
+    }
+
     // Transform the data to match the expected frontend format
     const transformedReport = {
       id: report.id,
@@ -97,7 +119,18 @@ export async function GET(
           role: assignment.sms1_users.role,
           assignedAt: assignment.assigned_at
         })) : [],
-      notes: [], // TODO: Implement notes system if needed
+      notes: notes ? notes.map(note => {
+        const user = Array.isArray(note.sms1_users) ? note.sms1_users[0] : note.sms1_users;
+        return {
+          id: note.id,
+          content: note.comment,
+          createdAt: note.created_at,
+          officer: {
+            name: user?.full_name || 'Unknown User',
+            title: user?.position || 'Unknown Position'
+          }
+        };
+      }) : [],
       attachments: [], // TODO: Implement attachments if needed
       timeline: [
         {

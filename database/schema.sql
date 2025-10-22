@@ -82,6 +82,17 @@ CREATE TABLE sms1_otp_codes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- AI usage tracking for daily limits
+CREATE TABLE sms1_ai_usage (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES sms1_users(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    questions_asked INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, date)
+);
+
 -- Indexes for better performance
 CREATE INDEX idx_sms1_users_email ON sms1_users(email);
 CREATE INDEX idx_sms1_users_role_approved ON sms1_users(role, is_approved);
@@ -93,6 +104,7 @@ CREATE INDEX idx_sms1_report_assignments_report ON sms1_report_assignments(repor
 CREATE INDEX idx_sms1_report_assignments_officer ON sms1_report_assignments(officer_id);
 CREATE INDEX idx_sms1_report_comments_report ON sms1_report_comments(report_id);
 CREATE INDEX idx_sms1_otp_codes_email_expires ON sms1_otp_codes(email, expires_at);
+CREATE INDEX idx_sms1_ai_usage_user_date ON sms1_ai_usage(user_id, date);
 
 -- Function to generate reference numbers
 CREATE OR REPLACE FUNCTION generate_reference_number()
@@ -150,6 +162,11 @@ CREATE TRIGGER trigger_sms1_reports_updated_at
 
 CREATE TRIGGER trigger_sms1_report_comments_updated_at
     BEFORE UPDATE ON sms1_report_comments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER trigger_sms1_ai_usage_updated_at
+    BEFORE UPDATE ON sms1_ai_usage
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at();
 

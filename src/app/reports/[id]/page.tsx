@@ -72,6 +72,7 @@ export default function ReportDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showAddNote, setShowAddNote] = useState(false)
   const [newNote, setNewNote] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
   
   // Modal states
   const [showStatusModal, setShowStatusModal] = useState(false)
@@ -90,6 +91,23 @@ export default function ReportDetailsPage() {
   const [loadingOfficers, setLoadingOfficers] = useState(false)
 
   useEffect(() => {
+    const fetchReport = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(`/api/reports/${reportId}`)
+        if (!response.ok) {
+          throw new Error('Report not found')
+        }
+        const data = await response.json()
+        setReport(data.report)
+      } catch (error) {
+        console.error('Error fetching report:', error)
+        setError(error instanceof Error ? error.message : 'An error occurred')
+      } finally {
+        setLoading(false)
+      }
+    }
+
     if (reportId) {
       fetchReport()
     }
@@ -100,23 +118,6 @@ export default function ReportDetailsPage() {
       fetchOfficers(officerSearch)
     }
   }, [showOfficerModal, officerSearch])
-
-  const fetchReport = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch(`/api/reports/${reportId}`)
-      if (!response.ok) {
-        throw new Error('Report not found')
-      }
-      const data = await response.json()
-      setReport(data.report)
-    } catch (error) {
-      console.error('Error fetching report:', error)
-      setError(error instanceof Error ? error.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const fetchOfficers = async (searchQuery = '') => {
     try {
@@ -297,6 +298,47 @@ export default function ReportDetailsPage() {
     }
   }
 
+  const handleSaveNote = async () => {
+    if (!newNote.trim() || !report) return
+    
+    setSavingNote(true)
+    try {
+      const response = await fetch(`/api/reports/${reportId}/notes`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ content: newNote.trim() })
+      })
+
+      const responseData = await response.json()
+
+      if (response.ok) {
+        // Add the new note to the report
+        const updatedReport = {
+          ...report,
+          notes: [...report.notes, responseData.note],
+          updatedAt: new Date().toISOString()
+        }
+        setReport(updatedReport)
+        setNewNote('')
+        setShowAddNote(false)
+        
+        // Show success message
+        alert('Note added successfully!')
+      } else {
+        console.error('Failed to save note:', responseData)
+        alert(`Failed to save note: ${responseData.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error saving note:', error)
+      alert('Network error occurred while saving note. Please try again.')
+    } finally {
+      setSavingNote(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -330,136 +372,163 @@ export default function ReportDetailsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      {/* Header */}
-      <div className="bg-white shadow">
+      
+      {/* Main Header Section - Blue Background */}
+      <div className="bg-blue-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
+          <div className="flex items-center justify-between py-6">
+            <Link href="/dashboard" className="flex items-center text-white/80 hover:text-white transition-colors">
               <ArrowLeft className="h-5 w-5 mr-2" />
               Back to Dashboard
             </Link>
-            <h1 className="text-xl font-semibold text-gray-900">Report Details</h1>
-            <div className="w-32"></div>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Report Header */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{report.referenceNumber}</h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Submitted on {formatDate(report.createdAt)}
-                  </p>
+          
+          {/* Report Title and Meta */}
+          <div className="pb-8">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center space-x-3 mb-3">
+                  <CheckCircle className="h-8 w-8 text-white" />
+                  <h1 className="text-3xl font-bold text-white">
+                    Report #{report.referenceNumber}
+                  </h1>
                 </div>
-                <div className="flex space-x-3">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(report.status)}`}>
-                    {getStatusIcon(report.status)}
-                    <span className="ml-2">{report.status.replace('_', ' ').toUpperCase()}</span>
+                <p className="text-blue-100 text-lg">
+                  Submitted on {formatDate(report.createdAt)}
+                </p>
+                
+                {/* Status and Priority Badges */}
+                <div className="flex items-center space-x-3 mt-4">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    report.status === 'closed' ? 'bg-green-600 text-white' :
+                    report.status === 'in_progress' ? 'bg-yellow-600 text-white' :
+                    'bg-red-600 text-white'
+                  }`}>
+                    {report.status === 'closed' ? 'Closed' : 
+                     report.status === 'in_progress' ? 'In Progress' : 'Open'}
                   </span>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${getPriorityColor(report.priority)}`}>
-                    {report.priority.toUpperCase()} PRIORITY
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    report.priority === 'high' ? 'bg-red-200 text-red-800' :
+                    report.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
+                    'bg-blue-200 text-blue-800'
+                  }`}>
+                    {report.priority.charAt(0).toUpperCase() + report.priority.slice(1)} Priority
                   </span>
                 </div>
               </div>
               
-              <div className="border-t pt-4">
-                <h3 className="font-medium text-gray-900 mb-2">Report Description</h3>
-                <p className="text-gray-700 leading-relaxed">{report.description}</p>
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-3">
+                <button 
+                  onClick={() => setShowStatusModal(true)}
+                  className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Change Status
+                </button>
+                <button 
+                  onClick={() => setShowOfficerModal(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Assign Officer
+                </button>
+                <button 
+                  onClick={() => setShowPriorityModal(true)}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Change Priority
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* School and Teacher Information */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">School & Teacher Details</h3>
+      {/* Content Area */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Left Column - Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Report Description */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <MessageSquare className="h-5 w-5 text-gray-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Report Description</h2>
+              </div>
+              <p className="text-gray-700 leading-relaxed">{report.description}</p>
+            </div>
+
+            {/* School & Teacher Details */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center space-x-2 mb-6">
+                <MapPin className="h-5 w-5 text-gray-600" />
+                <h2 className="text-lg font-semibold text-gray-900">School & Teacher Details</h2>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-gray-900">{report.school.name}</p>
-                      <p className="text-sm text-gray-500">{report.school.code}</p>
-                      <p className="text-sm text-gray-600">{report.school.address}</p>
-                      <p className="text-sm text-gray-600">{report.school.phone}</p>
-                    </div>
-                  </div>
+                {/* School Info */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 text-lg mb-2">{report.school.name}</h3>
+                  <p className="text-gray-600 mb-1">{report.school.code}</p>
+                  <p className="text-sm text-gray-500">
+                    Address: {report.school.address || 'Not available'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Phone: {report.school.phone || 'Not available'}
+                  </p>
                 </div>
                 
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <User className="h-5 w-5 text-gray-400 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-gray-900">{report.teacherName}</p>
-                      <p className="text-sm text-gray-600">{report.grade}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <BookOpen className="h-5 w-5 text-gray-400 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-gray-900">{report.subject}</p>
-                      <p className="text-sm text-gray-600">Subject</p>
-                    </div>
-                  </div>
+                {/* Teacher Info */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 text-lg mb-2">{report.teacherName}</h3>
+                  <p className="text-gray-600 mb-1">{report.grade}</p>
+                  <p className="text-sm text-gray-500">
+                    Subject: {report.subject}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Resolution (if closed) */}
-            {report.status === 'closed' && report.resolution && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-                <div className="flex items-center mb-3">
-                  <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-green-900">Resolution</h3>
+            {/* Investigation Notes */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-2">
+                  <MessageSquare className="h-5 w-5 text-gray-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Investigation Notes</h2>
                 </div>
-                <p className="text-green-800">{report.resolution}</p>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Investigation Notes</h3>
                 <button
                   onClick={() => setShowAddNote(!showAddNote)}
-                  className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
                 >
-                  <MessageSquare className="h-4 w-4 mr-1" />
-                  Add Note
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Add Note</span>
                 </button>
               </div>
 
               {showAddNote && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <textarea
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
-                    placeholder="Add your investigation note..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    rows={3}
+                    placeholder="Document your findings, follow-ups, or investigation details..."
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    rows={4}
                   />
-                  <div className="flex space-x-2 mt-3">
+                  <div className="flex space-x-3 mt-3">
                     <button
-                      onClick={() => {
-                        // TODO: Save note
-                        setNewNote('')
-                        setShowAddNote(false)
-                      }}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      onClick={handleSaveNote}
+                      disabled={!newNote.trim() || savingNote}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      Save Note
+                      {savingNote ? 'Saving...' : 'Save Note'}
                     </button>
                     <button
                       onClick={() => {
                         setNewNote('')
                         setShowAddNote(false)
                       }}
-                      className="px-3 py-1.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                      className="px-4 py-2 bg-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-400 transition-colors"
                     >
                       Cancel
                     </button>
@@ -470,148 +539,104 @@ export default function ReportDetailsPage() {
               {report.notes.length > 0 ? (
                 <div className="space-y-4">
                   {report.notes.map((note) => (
-                    <div key={note.id} className="border-l-4 border-blue-200 pl-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-900">
-                          {note.officer.name}
-                        </span>
-                        <span className="text-xs text-gray-500">
+                    <div key={note.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <User className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm font-semibold text-gray-900">
+                            {note.officer.name}
+                          </span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                            {note.officer.title}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500 font-medium">
                           {formatDate(note.createdAt)}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-1">{note.officer.title}</p>
-                      <p className="text-gray-700">{note.content}</p>
+                      <p className="text-gray-700 leading-relaxed">{note.content}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-center py-4">No investigation notes yet.</p>
+                <div className="text-center py-8">
+                  <p className="text-gray-500 italic">No investigation notes have been added yet.</p>
+                </div>
               )}
             </div>
+            
           </div>
 
-          {/* Sidebar */}
+          {/* Right Column - Sidebar */}
           <div className="space-y-6">
-            {/* Report Info */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            
+            {/* Report Information */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Information</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Reporter Type</label>
-                  <p className="text-gray-900 capitalize">{report.reporterType}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Region</label>
-                  <p className="text-gray-900">{report.school.region.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Last Updated</label>
-                  <p className="text-gray-900">{formatDate(report.updatedAt)}</p>
-                </div>
-                {report.assignedOfficers.length > 0 && (
+              
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <User className="h-4 w-4 text-blue-600" />
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Assigned Officers</label>
-                    <div className="space-y-2 mt-1">
-                      {report.assignedOfficers.map((officer, index) => (
-                        <div key={officer.id} className="border-l-2 border-blue-200 pl-3">
-                          <p className="text-gray-900 font-medium">{officer.name}</p>
-                          <p className="text-sm text-gray-600">{officer.title}</p>
-                          <p className="text-sm text-gray-600">{officer.email}</p>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-sm font-medium text-gray-500">Reporter:</p>
+                    <p className="text-gray-900 capitalize">{report.reporterType}</p>
                   </div>
-                )}
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <MapPin className="h-4 w-4 text-green-600" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Region:</p>
+                    <p className="text-gray-900">{report.school.region.name}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Officer Notification */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Officer Notifications</h3>
-              {report.assignedOfficers.length > 0 ? (
-                <div className="space-y-3">
-                  {report.assignedOfficers.map((officer, index) => (
-                    <div key={officer.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-start space-x-3">
-                        <User className="h-5 w-5 text-blue-600 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-blue-900">{officer.name}</p>
-                          <p className="text-sm text-blue-700">{officer.title}</p>
-                          <p className="text-sm text-blue-600 mt-1">
-                            Notified on {formatDate(report.timeline.find(item => item.action === 'Assigned to officer')?.timestamp || report.createdAt)}
-                          </p>
-                        </div>
-                      </div>
+              
+              {report.assignedOfficers.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <p className="text-sm font-medium text-gray-500 mb-3">Assigned Officer</p>
+                  {report.assignedOfficers.map((officer) => (
+                    <div key={officer.id} className="bg-blue-50 rounded-lg p-3">
+                      <p className="font-semibold text-gray-900">{officer.name}</p>
+                      <p className="text-sm text-gray-600">{officer.title}</p>
+                      <a 
+                        href={`mailto:${officer.email}`}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        {officer.email}
+                      </a>
                     </div>
                   ))}
-                </div>
-              ) : (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-yellow-800">
-                    <strong>Status:</strong> No officers assigned yet. The report is in queue for assignment.
-                  </p>
                 </div>
               )}
             </div>
 
             {/* Timeline */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h3>
+              
               <div className="space-y-4">
                 {report.timeline.map((item, index) => (
-                  <div key={item.id} className="relative">
-                    {index !== report.timeline.length - 1 && (
-                      <div className="absolute left-2 top-8 bottom-0 w-0.5 bg-gray-200"></div>
-                    )}
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-4 h-4 bg-blue-600 rounded-full mt-1"></div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900">{item.action}</p>
-                        <p className="text-sm text-gray-600">{item.description}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs text-gray-500">
-                            {item.officer ? item.officer.name : 'System'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatTimelineDate(item.timestamp)}
-                          </p>
-                        </div>
-                      </div>
+                  <div key={item.id} className="flex items-start space-x-3">
+                    <div className={`w-3 h-3 rounded-full mt-1 ${
+                      item.action.includes('closed') ? 'bg-green-500' :
+                      item.action.includes('submitted') ? 'bg-blue-500' :
+                      'bg-gray-400'
+                    }`}></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{item.action}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formatDate(item.timestamp)}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Actions */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="space-y-3">
-                <button 
-                  onClick={() => setShowStatusModal(true)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Update Status
-                </button>
-                <button 
-                  onClick={() => setShowOfficerModal(true)}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Assign Officer
-                </button>
-                <button 
-                  onClick={() => setShowPriorityModal(true)}
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center"
-                >
-                  <AlertTriangle className="h-4 w-4 mr-2" />
-                  Change Priority
-                </button>
-              </div>
-            </div>
+            
           </div>
         </div>
+      </div>
 
       {/* Status Update Modal */}
       {showStatusModal && (
@@ -814,7 +839,6 @@ export default function ReportDetailsPage() {
         </div>
       )}
 
-      </div>
     </div>
   )
 }

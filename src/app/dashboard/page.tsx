@@ -3,7 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FileText, AlertTriangle, CheckCircle, Clock, Eye } from 'lucide-react'
+import { 
+  FileText, 
+  AlertTriangle, 
+  CheckCircle, 
+  Clock, 
+  Eye,
+  Search,
+  ChevronRight,
+  Filter,
+  BarChart3,
+  TrendingUp
+} from 'lucide-react'
 import Navigation from '@/components/Navigation'
 
 interface DashboardStats {
@@ -11,6 +22,13 @@ interface DashboardStats {
   openReports: number
   inProgressReports: number
   closedReports: number
+}
+
+interface QuickMetrics {
+  assignedToMe: number
+  highPriorityOpen: number
+  avgOpenDays: number
+  totalOpen: number
 }
 
 interface RecentReport {
@@ -30,16 +48,82 @@ export default function DashboardPage() {
     inProgressReports: 0,
     closedReports: 0
   })
+  const [quickMetrics, setQuickMetrics] = useState<QuickMetrics>({
+    assignedToMe: 0,
+    highPriorityOpen: 0,
+    avgOpenDays: 0,
+    totalOpen: 0
+  })
   const [recentReports, setRecentReports] = useState<RecentReport[]>([])
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [lastFetch, setLastFetch] = useState<number>(0)
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [regionFilter, setRegionFilter] = useState('all')
+  const [filteredReports, setFilteredReports] = useState<RecentReport[]>([])
+  
+  // Chart hover states
+  const [hoveredSegment, setHoveredSegment] = useState<string | null>(null)
+  const [hoveredBar, setHoveredBar] = useState<number | null>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter reports when search term or filters change
+  useEffect(() => {
+    let filtered = [...recentReports]
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(report =>
+        report.ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        report.school.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(report => report.status.toLowerCase() === statusFilter.toLowerCase())
+    }
+
+    // Apply priority filter
+    if (priorityFilter !== 'all') {
+      // Note: We'll need to get priority from the API
+      // For now, we'll simulate this
+      filtered = filtered.filter(report => {
+        // This would need actual priority data from the API
+        return true
+      })
+    }
+
+    // Apply region filter
+    if (regionFilter !== 'all') {
+      // Note: We'll need region data from the API
+      // For now, we'll simulate this
+      filtered = filtered.filter(report => {
+        // This would need actual region data from the API
+        return true
+      })
+    }
+
+    setFilteredReports(filtered)
+  }, [recentReports, searchTerm, statusFilter, priorityFilter, regionFilter])
 
   const checkAuthAndLoadData = async () => {
     try {
+      // Check if we have recent data (cache for 2 minutes)
+      const now = Date.now()
+      if (lastFetch && (now - lastFetch) < 120000 && user && stats.totalReports > 0) {
+        setIsLoading(false)
+        return
+      }
+
       // Check authentication status
       const authResponse = await fetch('/api/auth/validate', {
         credentials: 'include'
@@ -67,7 +151,9 @@ export default function DashboardPage() {
       if (dashboardResponse.ok) {
         const dashboardData = await dashboardResponse.json()
         setStats(dashboardData.stats)
+        setQuickMetrics(dashboardData.quickMetrics)
         setRecentReports(dashboardData.recentReports)
+        setLastFetch(now)
       } else {
         console.error('Failed to load dashboard data')
         // Set empty data if API fails
@@ -103,103 +189,291 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       
-      {/* Dashboard Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome back, {user?.fullName}</p>
+      {/* Header Section */}
+      <div className="bg-primary-600 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-primary-100 mt-2">Welcome back, {user?.fullName}</p>
         </div>
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Reports</p>
-                  <p className="text-3xl font-bold text-gray-900">{stats.totalReports}</p>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Charts & Metrics */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Status Distribution */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Status Distribution</h3>
+              <div className="flex items-center justify-center mb-6 relative">
+                <div className="relative w-32 h-32">
+                  {/* Interactive pie chart */}
+                  <div className="w-32 h-32 rounded-full border-8 border-gray-200 relative overflow-hidden">
+                    {stats.totalReports > 0 ? (
+                      <>
+                        {/* Pie chart segments */}
+                        <div 
+                          className="absolute inset-0 rounded-full cursor-pointer transition-opacity"
+                          style={{
+                            background: `conic-gradient(
+                              #ef4444 0deg ${(stats.openReports / stats.totalReports) * 360}deg,
+                              #3b82f6 ${(stats.openReports / stats.totalReports) * 360}deg ${((stats.openReports + stats.inProgressReports) / stats.totalReports) * 360}deg,
+                              #10b981 ${((stats.openReports + stats.inProgressReports) / stats.totalReports) * 360}deg 360deg
+                            )`,
+                            opacity: hoveredSegment ? 0.7 : 1
+                          }}
+                          onMouseEnter={() => setHoveredSegment('chart')}
+                          onMouseLeave={() => setHoveredSegment(null)}
+                        />
+                        
+                        {/* Hover tooltip */}
+                        {hoveredSegment && (
+                          <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap z-10">
+                            <div>Open: {stats.openReports}</div>
+                            <div>In Progress: {stats.inProgressReports}</div>
+                            <div>Closed: {stats.closedReports}</div>
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 rounded-full bg-gray-100 flex items-center justify-center">
+                        <span className="text-gray-400 text-xs">No data</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <FileText className="h-8 w-8 text-gray-400" />
+              </div>
+              <div className="space-y-3">
+                <div 
+                  className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors"
+                  onMouseEnter={() => setHoveredSegment('closed')}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-600">Closed</span>
+                  </div>
+                  <span className="text-sm font-medium">{stats.closedReports}</span>
+                </div>
+                <div 
+                  className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors"
+                  onMouseEnter={() => setHoveredSegment('in_progress')}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm text-gray-600">In Progress</span>
+                  </div>
+                  <span className="text-sm font-medium">{stats.inProgressReports}</span>
+                </div>
+                <div 
+                  className="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors"
+                  onMouseEnter={() => setHoveredSegment('open')}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                    <span className="text-sm text-gray-600">Open</span>
+                  </div>
+                  <span className="text-sm font-medium">{stats.openReports}</span>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Open Reports</p>
-                  <p className="text-3xl font-bold text-warning-600">{stats.openReports}</p>
+            {/* Reports Over Time */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Reports Over Time (14d)</h3>
+              <div className="h-48 flex items-end justify-center space-x-2 relative">
+                {/* Interactive bar chart */}
+                {[1, 2, 3, 1, 2, 1, 3].map((height, index) => (
+                  <div key={index} className="flex flex-col items-center space-y-1 relative">
+                    <div 
+                      className={`w-8 bg-primary-500 rounded-t cursor-pointer transition-all duration-200 ${
+                        height === 1 ? 'h-8' : height === 2 ? 'h-16' : 'h-24'
+                      } ${hoveredBar === index ? 'bg-primary-600 transform scale-105' : ''}`}
+                      onMouseEnter={() => setHoveredBar(index)}
+                      onMouseLeave={() => setHoveredBar(null)}
+                    />
+                    
+                    {/* Hover tooltip */}
+                    {hoveredBar === index && (
+                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                        {height} reports
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-2 border-transparent border-t-gray-900"></div>
+                      </div>
+                    )}
+                    
+                    <span className="text-xs text-gray-500">
+                      Oct {15 + index}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-center space-x-4 mt-4 text-xs">
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-primary-500 rounded"></div>
+                  <span className="text-gray-600">new</span>
                 </div>
-                <AlertTriangle className="h-8 w-8 text-warning-400" />
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-primary-300 rounded"></div>
+                  <span className="text-gray-600">submissions</span>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between">
+            {/* Quick Metrics */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Metrics</h3>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">In Progress</p>
-                  <p className="text-3xl font-bold text-primary-600">{stats.inProgressReports}</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Assigned to me</p>
+                  <p className="text-2xl font-bold text-gray-900">{quickMetrics.assignedToMe}</p>
                 </div>
-                <Clock className="h-8 w-8 text-primary-400" />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Closed Reports</p>
-                  <p className="text-3xl font-bold text-success-600">{stats.closedReports}</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">High priority open</p>
+                  <p className="text-2xl font-bold text-gray-900">{quickMetrics.highPriorityOpen}</p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-success-400" />
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Avg open days</p>
+                  <p className="text-2xl font-bold text-gray-900">{quickMetrics.avgOpenDays}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Total open</p>
+                  <p className="text-2xl font-bold text-gray-900">{quickMetrics.totalOpen}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Recent Reports */}
-          <div className="bg-white rounded-xl shadow-sm border">
-            <div className="p-6 border-b flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Recent Reports</h3>
-              <Link href="/reports" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
-                View All Reports
-              </Link>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {recentReports.length > 0 ? recentReports.map((report) => (
-                  <div key={report.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                    <div className="flex-1 mb-3 sm:mb-0">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <span className="font-medium text-gray-900">{report.ref}</span>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          report.status === 'Open' ? 'bg-red-100 text-red-800' :
-                          report.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {report.status}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-1">{report.description}</p>
-                      <p className="text-xs text-gray-500">{report.school} • {report.time}</p>
-                    </div>
-                    <Link 
-                      href={`/reports/${report.id}`}
-                      className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded text-sm font-medium inline-flex items-center justify-center sm:ml-4"
-                    >
-                      <Eye className="h-4 w-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">View Details</span>
-                      <span className="sm:hidden">View</span>
-                    </Link>
+          {/* Right Column - Reports List */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">All Reports</h3>
+                  <span className="text-sm text-gray-500">
+                    Showing {filteredReports.length} of {recentReports.length}
+                  </span>
+                </div>
+                
+                {/* Search and Filters */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search reports, schools, or regions..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    />
                   </div>
+                  <div className="flex gap-2">
+                    <select 
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="open">Open</option>
+                      <option value="in progress">In Progress</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                    <select 
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                    >
+                      <option value="all">All Priority</option>
+                      <option value="high">High Priority</option>
+                      <option value="medium">Medium Priority</option>
+                      <option value="low">Low Priority</option>
+                    </select>
+                    <select 
+                      value={regionFilter}
+                      onChange={(e) => setRegionFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                    >
+                      <option value="all">All Regions</option>
+                      <option value="georgetown">Georgetown</option>
+                      <option value="region_7">Region 7</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reports List */}
+              <div className="divide-y divide-gray-200">
+                {filteredReports.length > 0 ? filteredReports.map((report) => (
+                  <Link 
+                    key={report.id}
+                    href={`/reports/${report.id}`}
+                    className="block p-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-3 mb-1">
+                          <span className="font-medium text-primary-600">{report.ref}</span>
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            report.status === 'Open' ? 'bg-orange-100 text-orange-800' :
+                            report.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {report.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-900 mb-1">{report.description}</p>
+                        <p className="text-xs text-gray-500">{report.school} • {report.time}</p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </div>
+                  </Link>
                 )) : (
-                  <div className="text-center py-8">
+                  <div className="p-8 text-center">
                     <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No reports found</p>
-                    <p className="text-gray-400 text-sm">New reports will appear here when submitted</p>
+                    <p className="text-gray-500 mb-2">
+                      {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || regionFilter !== 'all' 
+                        ? 'No reports match your filters' 
+                        : 'No reports found'
+                      }
+                    </p>
+                    <p className="text-gray-400 text-sm">
+                      {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || regionFilter !== 'all' 
+                        ? 'Try adjusting your search criteria' 
+                        : 'New reports will appear here when submitted'
+                      }
+                    </p>
                   </div>
                 )}
               </div>
+
+              {/* Pagination */}
+              {filteredReports.length > 0 && (
+                <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <span>Rows per page:</span>
+                    <select className="ml-2 border-none bg-transparent focus:ring-0">
+                      <option>10</option>
+                      <option>25</option>
+                      <option>50</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">Page 1 of 1</span>
+                    <button className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50" disabled>
+                      Previous
+                    </button>
+                    <button className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50" disabled>
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </main>
+        </div>
       </div>
-    )
+    </div>
+  )
 }

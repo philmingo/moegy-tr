@@ -14,6 +14,15 @@ const supabase = createClient(
   }
 )
 
+interface OfficerSubscription {
+  region_id: string
+  school_level_id: string
+}
+
+interface ReportAssignment {
+  report_id: string
+}
+
 async function getAuthenticatedUser() {
   try {
     const cookieStore = await cookies()
@@ -30,6 +39,59 @@ async function getAuthenticatedUser() {
   }
 }
 
+async function getAccessibleReportIds(userId: string, role: string) {
+  if (role !== 'officer') {
+    return null // No filtering needed
+  }
+
+  const accessibleReportIds = new Set<string>()
+
+  // Get reports assigned directly to this officer
+  const { data: assignments } = await supabase
+    .from('sms1_report_assignments')
+    .select('report_id')
+    .eq('officer_id', userId)
+    .is('removed_at', null)
+
+  if (assignments) {
+    assignments.forEach(assignment => {
+      accessibleReportIds.add((assignment as ReportAssignment).report_id)
+    })
+  }
+
+  // Get officer's subscriptions
+  const { data: subscriptions } = await supabase
+    .from('sms1_officer_subscriptions')
+    .select('region_id, school_level_id')
+    .eq('officer_id', userId)
+    .is('deleted_at', null)
+
+  if (subscriptions && subscriptions.length > 0) {
+    // Create individual queries for each subscription combination
+    const subscriptionPromises = (subscriptions as OfficerSubscription[]).map(async (sub) => {
+      const { data } = await supabase
+        .from('sms1_reports')
+        .select('id')
+        .eq('sms_schools.region_id', sub.region_id)
+        .eq('sms_schools.school_level_id', sub.school_level_id)
+      
+      return data || []
+    })
+
+    // Execute all subscription queries in parallel
+    const subscriptionResults = await Promise.all(subscriptionPromises)
+    
+    // Add all matching report IDs
+    subscriptionResults.forEach(reports => {
+      (reports as { id: string }[]).forEach(report => {
+        accessibleReportIds.add(report.id)
+      })
+    })
+  }
+
+  return accessibleReportIds.size > 0 ? Array.from(accessibleReportIds) : []
+}
+
 export async function GET() {
   try {
     const user = await getAuthenticatedUser()
@@ -41,42 +103,8 @@ export async function GET() {
       )
     }
 
-    // Get statistics from the reports table
-    const { data: stats, error: statsError } = await supabase
-      .rpc('get_dashboard_stats')
-
-    let dashboardStats
-    if (statsError || !stats) {
-      // Fallback: manually count if RPC function doesn't exist
-      const { data: allReports, error: reportsError } = await supabase
-        .from('sms1_reports')
-        .select('status')
-
-      if (reportsError) {
-        console.error('Error fetching reports for stats:', reportsError)
-        return NextResponse.json(
-          { error: 'Failed to fetch dashboard statistics' },
-          { status: 500 }
-        )
-      }
-
-      const totalReports = allReports.length
-      const openReports = allReports.filter(r => r.status === 'open').length
-      const inProgressReports = allReports.filter(r => r.status === 'in_progress').length
-      const closedReports = allReports.filter(r => r.status === 'closed').length
-
-      dashboardStats = {
-        totalReports,
-        openReports,
-        inProgressReports,
-        closedReports
-      }
-    } else {
-      dashboardStats = stats
-    }
-
-    // Get recent reports (last 5)
-    const { data: recentReports, error: recentError } = await supabase
+    // Build a single optimized query that gets all needed data at once
+    let reportsQuery = supabase
       .from('sms1_reports')
       .select(`
         id,
@@ -85,22 +113,122 @@ export async function GET() {
         description,
         created_at,
         sms_schools (
-          name
+          name,
+          region_id,
+          school_level_id
         )
       `)
       .order('created_at', { ascending: false })
-      .limit(5)
 
-    if (recentError) {
-      console.error('Error fetching recent reports:', recentError)
+    // Apply role-based filtering only for officers
+    if (user.role === 'officer') {
+      // Get accessible report IDs efficiently
+      const accessibleReportIds = await getAccessibleReportIds(user.userId, user.role)
+      
+      if (accessibleReportIds && accessibleReportIds.length > 0) {
+        reportsQuery = reportsQuery.in('id', accessibleReportIds)
+      } else {
+        // No accessible reports - return empty results quickly
+        return NextResponse.json({
+          stats: {
+            totalReports: 0,
+            openReports: 0,
+            inProgressReports: 0,
+            closedReports: 0
+          },
+          quickMetrics: {
+            assignedToMe: 0,
+            highPriorityOpen: 0,
+            avgOpenDays: 0,
+            totalOpen: 0
+          },
+          recentReports: []
+        })
+      }
+    }
+
+    const { data: allReports, error: reportsError } = await reportsQuery
+
+    if (reportsError) {
+      console.error('Error fetching reports:', reportsError)
       return NextResponse.json(
-        { error: 'Failed to fetch recent reports' },
+        { error: 'Failed to fetch dashboard data' },
         { status: 500 }
       )
     }
 
-    // Transform recent reports to match expected format
-    const transformedReports = (recentReports || []).map(report => {
+    // Calculate basic stats from the single query result
+    const totalReports = allReports?.length || 0
+    const openReports = allReports?.filter(r => r.status === 'open').length || 0
+    const inProgressReports = allReports?.filter(r => r.status === 'in_progress').length || 0
+    const closedReports = allReports?.filter(r => r.status === 'closed').length || 0
+
+    const dashboardStats = {
+      totalReports,
+      openReports,
+      inProgressReports,
+      closedReports
+    }
+
+    // Calculate quick metrics
+    let assignedToMe = 0
+    let highPriorityOpen = 0
+
+    // Get reports assigned directly to this user
+    if (user.role === 'officer') {
+      const { data: assignments } = await supabase
+        .from('sms1_report_assignments')
+        .select('report_id')
+        .eq('officer_id', user.userId)
+        .is('removed_at', null)
+
+      assignedToMe = assignments?.length || 0
+    } else {
+      // For admins and senior officers, show all open reports as "assigned to me"
+      assignedToMe = openReports
+    }
+
+    // Get high priority open reports
+    const { data: highPriorityReports } = await supabase
+      .from('sms1_reports')
+      .select('id')
+      .eq('status', 'open')
+      .eq('priority', 'high')
+
+    if (user.role === 'officer') {
+      // Filter high priority reports by accessibility for officers
+      const accessibleReportIds = await getAccessibleReportIds(user.userId, user.role)
+      if (accessibleReportIds && accessibleReportIds.length > 0) {
+        highPriorityOpen = highPriorityReports?.filter(r => 
+          accessibleReportIds.includes(r.id)
+        ).length || 0
+      }
+    } else {
+      highPriorityOpen = highPriorityReports?.length || 0
+    }
+
+    // Calculate average days open for open reports
+    let avgOpenDays = 0
+    if (openReports > 0) {
+      const openReportsData = allReports?.filter(r => r.status === 'open') || []
+      const totalDays = openReportsData.reduce((sum, report) => {
+        const created = new Date(report.created_at)
+        const now = new Date()
+        const days = Math.ceil((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+        return sum + days
+      }, 0)
+      avgOpenDays = Math.round(totalDays / openReports)
+    }
+
+    const quickMetrics = {
+      assignedToMe,
+      highPriorityOpen,
+      avgOpenDays,
+      totalOpen: openReports
+    }
+
+    // Transform recent reports (limit to 5 most recent)
+    const recentReports = (allReports || []).slice(0, 5).map(report => {
       const timeAgo = getTimeAgo(new Date(report.created_at))
       
       return {
@@ -115,7 +243,8 @@ export async function GET() {
 
     return NextResponse.json({
       stats: dashboardStats,
-      recentReports: transformedReports
+      quickMetrics,
+      recentReports
     })
 
   } catch (error) {
