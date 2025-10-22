@@ -1,103 +1,124 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 
+interface DatabaseReport {
+  id: string
+  reference_number: string
+  grade: string
+  teacher_name: string
+  subject: string
+  reporter_type: string
+  description: string
+  status: string
+  priority: string
+  created_at: string
+  updated_at: string
+  sms_schools: {
+    name: string
+    code: string
+    sms_regions: {
+      name: string
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
-    const region = searchParams.get('region')
+    const priority = searchParams.get('priority')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // TODO: Get reports from Supabase with filters
-    // For now, return mock data
+    const supabase = createAdminClient()
 
-    const allMockReports = [
-      {
-        id: '1',
-        referenceNumber: 'EDU20241001',
-        school: { name: 'Georgetown Primary School', code: 'GPS001', region: { name: 'Region 4 - Demerara-Mahaica' } },
-        grade: 'Grade 5',
-        teacherName: 'Ms. Sarah Johnson',
-        subject: 'Mathematics',
-        reporterType: 'parent',
-        description: 'Teacher has been absent for 3 consecutive days without notice. Students are being left unattended.',
-        status: 'open',
-        priority: 'high',
-        createdAt: '2024-10-21T08:30:00Z',
-        updatedAt: '2024-10-21T08:30:00Z'
-      },
-      {
-        id: '2', 
-        referenceNumber: 'EDU20241002',
-        school: { name: "Queen's College", code: 'QC001', region: { name: 'Region 4 - Demerara-Mahaica' } },
-        grade: 'Form 4A',
-        teacherName: 'Mr. David Williams',
-        subject: 'Physics',
-        reporterType: 'student',
-        description: 'Physics teacher frequently arrives late and leaves early. Missing important class time.',
-        status: 'in_progress',
-        priority: 'medium',
-        createdAt: '2024-10-20T14:15:00Z',
-        updatedAt: '2024-10-21T09:45:00Z'
-      },
-      {
-        id: '3',
-        referenceNumber: 'EDU20241003', 
-        school: { name: 'New Amsterdam Secondary School', code: 'NASS001', region: { name: 'Region 6 - East Berbice-Corentyne' } },
-        grade: 'Form 2B',
-        teacherName: 'Mrs. Patricia Singh',
-        subject: 'English Literature',
-        reporterType: 'other',
-        description: 'English teacher has not shown up for the past week. No substitute provided.',
-        status: 'closed',
-        priority: 'high',
-        createdAt: '2024-10-18T10:00:00Z',
-        updatedAt: '2024-10-21T16:30:00Z'
-      },
-      {
-        id: '4',
-        referenceNumber: 'EDU20241004',
-        school: { name: 'Mackenzie High School', code: 'MHS001', region: { name: 'Region 10 - Upper Demerara-Berbice' } },
-        grade: 'Form 5',
-        teacherName: 'Mr. Anthony Brown',
-        subject: 'Chemistry',
-        reporterType: 'parent',
-        description: 'Chemistry teacher often cancels classes or assigns non-teaching activities.',
-        status: 'open',
-        priority: 'medium',
-        createdAt: '2024-10-19T11:20:00Z',
-        updatedAt: '2024-10-19T11:20:00Z'
-      },
-      {
-        id: '5',
-        referenceNumber: 'EDU20241005',
-        school: { name: 'St. Margaret\'s Primary School', code: 'SMPS001', region: { name: 'Region 4 - Demerara-Mahaica' } },
-        grade: 'Grade 3',
-        teacherName: 'Ms. Jennifer Adams',
-        subject: 'Social Studies',
-        reporterType: 'student',
-        description: 'Teacher frequently uses phone during class and does not teach properly.',
-        status: 'in_progress', 
-        priority: 'low',
-        createdAt: '2024-10-17T13:45:00Z',
-        updatedAt: '2024-10-20T10:15:00Z'
-      }
-    ]
+    // Build the query
+    let query = supabase
+      .from('sms1_reports')
+      .select(`
+        id,
+        reference_number,
+        grade,
+        teacher_name,
+        subject,
+        reporter_type,
+        description,
+        status,
+        priority,
+        created_at,
+        updated_at,
+        sms_schools!inner (
+          name,
+          code,
+          sms_regions!inner (
+            name
+          )
+        )
+      `)
+      .order('created_at', { ascending: false })
 
-    // Filter by status if provided
-    let filteredReports = allMockReports
+    // Apply filters
     if (status) {
-      filteredReports = filteredReports.filter(report => report.status === status)
+      query = query.eq('status', status)
+    }
+    if (priority) {
+      query = query.eq('priority', priority)
     }
 
+    // Get total count for pagination with same filters
+    let countQuery = supabase
+      .from('sms1_reports')
+      .select('*', { count: 'exact', head: true })
+
+    // Apply same filters to count query
+    if (status) {
+      countQuery = countQuery.eq('status', status)
+    }
+    if (priority) {
+      countQuery = countQuery.eq('priority', priority)
+    }
+
+    const { count } = await countQuery
+
     // Apply pagination
-    const paginatedReports = filteredReports.slice(offset, offset + limit)
-    
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: reports, error } = await query
+
+    if (error) {
+      console.error('Database error:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch reports' },
+        { status: 500 }
+      )
+    }
+
+    // Transform the data to match the frontend interface
+    const transformedReports = (reports as DatabaseReport[])?.map(report => ({
+      id: report.id,
+      referenceNumber: report.reference_number,
+      school: {
+        name: report.sms_schools.name,
+        code: report.sms_schools.code,
+        region: {
+          name: report.sms_schools.sms_regions.name
+        }
+      },
+      grade: report.grade,
+      teacherName: report.teacher_name,
+      subject: report.subject,
+      reporterType: report.reporter_type,
+      description: report.description,
+      status: report.status,
+      priority: report.priority,
+      createdAt: report.created_at,
+      updatedAt: report.updated_at
+    })) || []
+
     return NextResponse.json({
-      reports: paginatedReports,
-      total: filteredReports.length,
-      hasMore: offset + limit < filteredReports.length
+      reports: transformedReports,
+      total: count || 0,
+      hasMore: offset + limit < (count || 0)
     })
 
   } catch (error) {

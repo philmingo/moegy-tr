@@ -216,34 +216,47 @@ export default function ReportDetailsPage() {
     const selectedOfficerData = officers.filter(o => selectedOfficers.includes(o.id))
     if (selectedOfficerData.length === 0) return
     
+    // Transform the officer data to the format expected by the database
+    const officerDataForDB = selectedOfficerData.map(officer => ({
+      id: officer.id,
+      name: officer.name,  // This comes from the officers API
+      title: officer.title || officer.position,
+      position: officer.position,
+      email: officer.email,
+      role: officer.role
+    }))
+    
     setActionLoading(true)
     try {
       const response = await fetch(`/api/reports/${reportId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedOfficers: selectedOfficers })
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ assignedOfficers: officerDataForDB })
       })
 
+      const responseData = await response.json()
+
       if (response.ok) {
-        const assignedOfficers = selectedOfficerData.map(officer => ({
-          id: officer.id,
-          name: officer.name,
-          title: officer.position,
-          position: officer.position,
-          email: officer.email,
-          role: officer.role
-        }))
-        
         setReport({
           ...report,
-          assignedOfficers: assignedOfficers,
+          assignedOfficers: officerDataForDB,
           updatedAt: new Date().toISOString()
         })
         setShowOfficerModal(false)
         setSelectedOfficers([])
+        
+        // Show success message
+        alert('Officers assigned successfully!')
+      } else {
+        console.error('Assignment failed:', responseData)
+        alert(`Failed to assign officers: ${responseData.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Error assigning officers:', error)
+      alert('Network error occurred while assigning officers. Please try again.')
     } finally {
       setActionLoading(false)
     }
@@ -599,7 +612,6 @@ export default function ReportDetailsPage() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Status Update Modal */}
       {showStatusModal && (
@@ -707,9 +719,10 @@ export default function ReportDetailsPage() {
                   onClick={handleAssignOfficers}
                   disabled={selectedOfficers.length === 0 || actionLoading}
                   className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg"
-              >
-                {actionLoading ? 'Assigning...' : 'Assign'}
-              </button>
+                >
+                  {actionLoading ? 'Assigning...' : 'Assign'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -801,6 +814,7 @@ export default function ReportDetailsPage() {
         </div>
       )}
 
+      </div>
     </div>
   )
 }

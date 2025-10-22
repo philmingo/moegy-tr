@@ -49,16 +49,22 @@ export default function ForgotPasswordPage() {
               <CheckCircle className="h-16 w-16 text-success-500 mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-gray-900 mb-4">Check Your Email</h1>
               <p className="text-gray-600 mb-6">
-                If an account with <strong>{email}</strong> exists, we&apos;ve sent you a password reset link.
+                If an account with <strong>{email}</strong> exists, we&apos;ve sent you a 6-digit reset code.
               </p>
               <p className="text-sm text-gray-500 mb-6">
-                Please check your email and click the link to reset your password. 
-                The link will expire in 1 hour for security reasons.
+                Please check your email for the 6-digit code and use it to reset your password. 
+                The code will expire in 15 minutes for security reasons.
               </p>
               <div className="space-y-3">
                 <Link 
-                  href="/admin"
+                  href="/admin/reset-password"
                   className="block w-full bg-primary-500 hover:bg-primary-600 text-white py-3 px-6 rounded-lg font-semibold transition-colors duration-200"
+                >
+                  Enter Reset Code
+                </Link>
+                <Link 
+                  href="/admin"
+                  className="block w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold transition-colors duration-200"
                 >
                   Back to Login
                 </Link>
@@ -89,7 +95,7 @@ export default function ForgotPasswordPage() {
               <Mail className="h-12 w-12 text-primary-500 mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Reset Your Password</h1>
               <p className="text-gray-600">
-                Enter your email address and we&apos;ll send you a link to reset your password.
+                Enter your email address and we&apos;ll send you a 6-digit code to reset your password.
               </p>
             </div>
 
@@ -123,7 +129,7 @@ export default function ForgotPasswordPage() {
                 disabled={isLoading || !email}
                 className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white py-3 px-6 rounded-lg font-semibold transition-colors duration-200"
               >
-                {isLoading ? 'Sending...' : 'Send Reset Link'}
+                {isLoading ? 'Sending...' : 'Send Reset Code'}
               </button>
             </form>
 
@@ -139,7 +145,7 @@ export default function ForgotPasswordPage() {
 
             <div className="mt-6 p-4 bg-info-50 border border-info-200 rounded-lg">
               <p className="text-info-700 text-xs">
-                <strong>Security Note:</strong> Password reset links expire after 1 hour. 
+                <strong>Security Note:</strong> Reset codes expire after 15 minutes. 
                 If you don&apos;t receive an email, check your spam folder or contact your system administrator.
               </p>
             </div>

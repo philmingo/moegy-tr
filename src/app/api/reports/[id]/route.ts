@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendAssignmentNotification } from '@/lib/email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,6 +32,17 @@ export async function GET(
           sms_regions (
             id,
             name
+          )
+        ),
+        sms1_report_assignments (
+          officer_id,
+          assigned_at,
+          sms1_users!sms1_report_assignments_officer_id_fkey (
+            id,
+            full_name,
+            email,
+            position,
+            role
           )
         )
       `)
@@ -74,11 +86,17 @@ export async function GET(
       priority: report.priority,
       createdAt: report.created_at,
       updatedAt: report.updated_at,
-      assignedOfficers: report.assigned_officer ? (
-        Array.isArray(JSON.parse(report.assigned_officer)) 
-          ? JSON.parse(report.assigned_officer) 
-          : [JSON.parse(report.assigned_officer)]
-      ) : [],
+      assignedOfficers: report.sms1_report_assignments ? report.sms1_report_assignments
+        .filter((assignment: any) => !assignment.removed_at) // Only active assignments
+        .map((assignment: any) => ({
+          id: assignment.sms1_users.id,
+          name: assignment.sms1_users.full_name || assignment.sms1_users.email?.split('@')[0] || 'Unknown',
+          title: assignment.sms1_users.position || 'Officer',
+          position: assignment.sms1_users.position || 'Officer',
+          email: assignment.sms1_users.email,
+          role: assignment.sms1_users.role,
+          assignedAt: assignment.assigned_at
+        })) : [],
       notes: [], // TODO: Implement notes system if needed
       attachments: [], // TODO: Implement attachments if needed
       timeline: [
@@ -111,33 +129,126 @@ export async function PATCH(
     const body = await request.json()
     const { status, priority, notes, assignedOfficers, assignedOfficer } = body
 
-    // Build the update object
+    // Handle regular report updates (status, priority)
     const updateData: any = {}
     
     if (status !== undefined) updateData.status = status
     if (priority !== undefined) updateData.priority = priority
-    if (assignedOfficers !== undefined) {
-      updateData.assigned_officer = assignedOfficers && assignedOfficers.length > 0 ? JSON.stringify(assignedOfficers) : null
-    } else if (assignedOfficer !== undefined) {
-      // Backward compatibility for single officer assignment
-      updateData.assigned_officer = assignedOfficer ? JSON.stringify([assignedOfficer]) : null
-    }
     updateData.updated_at = new Date().toISOString()
 
-    // Update report in Supabase
-    const { error } = await supabase
-      .from('sms1_reports')
-      .update(updateData)
-      .eq('id', id)
+    // Update the report if there are changes
+    if (Object.keys(updateData).length > 1) { // More than just updated_at
+      const { error: reportError } = await supabase
+        .from('sms1_reports')
+        .update(updateData)
+        .eq('id', id)
 
-    if (error) {
-      console.error('Error updating report:', error)
-      return NextResponse.json(
-        { error: 'Failed to update report' },
-        { status: 500 }
-      )
+      if (reportError) {
+        console.error('Supabase error details:', reportError)
+        return NextResponse.json(
+          { 
+            error: 'Failed to update report',
+            details: reportError.message,
+            code: reportError.code
+          },
+          { status: 500 }
+        )
+      }
     }
 
+    // Handle officer assignments separately
+    if (assignedOfficers !== undefined) {
+      // First, remove all existing assignments for this report
+      const { error: removeError } = await supabase
+        .from('sms1_report_assignments')
+        .delete()
+        .eq('report_id', id)
+      
+      if (removeError) {
+        console.error('Error removing existing assignments:', removeError)
+        return NextResponse.json(
+          { error: 'Failed to update officer assignments', details: removeError.message },
+          { status: 500 }
+        )
+      }
+
+      // Add new assignments if any officers are selected
+      if (assignedOfficers && assignedOfficers.length > 0) {
+        // TODO: Get the authenticated user ID for assigned_by
+        // For now, we'll use a placeholder or the first officer's ID
+        const assignments = assignedOfficers.map((officer: any) => ({
+          report_id: id,
+          officer_id: officer.id,
+          assigned_by: officer.id, // Temporary - should be current admin user ID
+          assigned_at: new Date().toISOString()
+        }))
+
+        const { error: assignError } = await supabase
+          .from('sms1_report_assignments')
+          .insert(assignments)
+
+        if (assignError) {
+          console.error('Error creating assignments:', assignError)
+          return NextResponse.json(
+            { error: 'Failed to assign officers', details: assignError.message },
+            { status: 500 }
+          )
+        }
+
+        // Send email notifications to assigned officers
+        try {
+          // Get the current report details for email
+          const { data: reportData } = await supabase
+            .from('sms1_reports')
+            .select(`
+              reference_number,
+              teacher_name,
+              subject,
+              description,
+              priority,
+              sms_schools (
+                name
+              )
+            `)
+            .eq('id', id)
+            .single()
+
+          if (reportData) {
+            // Send email to each assigned officer
+            const emailPromises = assignedOfficers.map(async (officer: any) => {
+              try {
+                await sendAssignmentNotification(
+                  officer.email,
+                  officer.name,
+                  {
+                    referenceNumber: reportData.reference_number,
+                    school: (reportData.sms_schools as any)?.name || 'Unknown School',
+                    teacherName: reportData.teacher_name,
+                    subject: reportData.subject,
+                    description: reportData.description,
+                    priority: reportData.priority
+                  }
+                )
+                console.log(`Assignment notification sent to ${officer.email}`)
+              } catch (emailError) {
+                console.error(`Failed to send email to ${officer.email}:`, emailError)
+                // Don't fail the assignment if email fails
+              }
+            })
+
+            // Wait for all emails to be sent (but don't block the response)
+            Promise.all(emailPromises).catch(error => {
+              console.error('Some assignment emails failed:', error)
+            })
+          }
+        } catch (emailError) {
+          console.error('Error sending assignment notifications:', emailError)
+          // Don't fail the assignment if email fails
+        }
+      }
+    }
+
+    console.log('Report updated successfully')
     return NextResponse.json({
       success: true,
       message: 'Report updated successfully'

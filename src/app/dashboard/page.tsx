@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FileText, Users, AlertTriangle, CheckCircle, Clock, Menu, LogOut, Eye } from 'lucide-react'
+import { FileText, AlertTriangle, CheckCircle, Clock, Eye } from 'lucide-react'
+import Navigation from '@/components/Navigation'
 
 interface DashboardStats {
   totalReports: number
@@ -31,7 +32,6 @@ export default function DashboardPage() {
   })
   const [recentReports, setRecentReports] = useState<RecentReport[]>([])
   const [user, setUser] = useState<any>(null)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -82,15 +82,6 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' })
-      window.location.href = '/admin'
-    } catch (error) {
-      console.error('Logout failed:', error)
-    }
-  }
-
   // Show loading state while checking authentication
   if (isLoading) {
     return (
@@ -109,78 +100,19 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className={`bg-white shadow-lg transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} lg:w-64`}>
-        <div className="p-4">
-          <div className="flex items-center space-x-3">
-            <div className="bg-primary-500 rounded-lg p-2">
-              <AlertTriangle className="h-6 w-6 text-white" />
-            </div>
-            <div className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block`}>
-              <h1 className="font-bold text-gray-900">EduAlert</h1>
-              <p className="text-xs text-gray-600">Admin Dashboard</p>
-            </div>
-          </div>
-        </div>
-
-        <nav className="mt-8">
-          <div className="px-4 space-y-2">
-            <a href="#" className="flex items-center space-x-3 px-3 py-2 rounded-lg bg-primary-50 text-primary-600">
-              <FileText className="h-5 w-5" />
-              <span className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block`}>Reports</span>
-            </a>
-            <Link href="/report" className="flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100">
-              <AlertTriangle className="h-5 w-5" />
-              <span className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block`}>Report Teacher Absence</span>
-            </Link>
-            {(['admin', 'senior_officer'].includes(user?.role)) && (
-              <Link href="/officers" className="flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100">
-                <Users className="h-5 w-5" />
-                <span className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block`}>Officers</span>
-              </Link>
-            )}
-          </div>
-        </nav>
-
-        <div className="absolute bottom-4 left-4 right-4">
-          <div className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block mb-4`}>
-            <div className="text-sm">
-              <p className="font-medium text-gray-900">{user?.fullName}</p>
-              <p className="text-gray-600 capitalize">{user?.role}</p>
-            </div>
-          </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center space-x-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 w-full"
-          >
-            <LogOut className="h-5 w-5" />
-            <span className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block`}>Logout</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      
+      {/* Dashboard Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <header className="bg-white shadow-sm border-b px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button 
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-              <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-            </div>
-          </div>
-        </header>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-2">Welcome back, {user?.fullName}</p>
+        </div>
 
-        {/* Dashboard Content */}
-        <main className="flex-1 p-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm border p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -269,6 +201,5 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
-    </div>
-  )
+    )
 }

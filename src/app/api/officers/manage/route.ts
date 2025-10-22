@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { createClient } from '@supabase/supabase-js'
+import { sendWelcomeEmail } from '@/lib/email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -195,6 +196,19 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to create officer' },
         { status: 500 }
       )
+    }
+
+    // Send welcome email to the new officer
+    try {
+      const officerName = newUser.full_name || newUser.email.split('@')[0]
+      const roleLabel = role === 'senior_officer' ? 'Senior Officer' : 
+                       role === 'admin' ? 'Administrator' : 'Officer'
+      
+      await sendWelcomeEmail(newUser.email, officerName, roleLabel)
+      console.log(`Welcome email sent to ${newUser.email}`)
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError)
+      // Don't fail the officer creation if email fails
     }
 
     return NextResponse.json({

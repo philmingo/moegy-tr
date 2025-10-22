@@ -113,6 +113,7 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
+      
       {/* Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -120,59 +121,63 @@ export default function ReportsPage() {
             <div className="flex items-center">
               <Link href="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
                 <ArrowLeft className="h-5 w-5 mr-2" />
-                Back to Dashboard
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Link>
             </div>
-            <h1 className="text-xl font-semibold text-gray-900">All Reports</h1>
-            <div className="w-32"></div> {/* Spacer for centering */}
+            <h1 className="text-lg sm:text-xl font-semibold text-gray-900">All Reports</h1>
+            <div className="w-8 sm:w-32"></div> {/* Spacer for centering */}
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Filters and Search */}
-        <div className="bg-white rounded-lg shadow-sm mb-6 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg shadow-sm mb-4 sm:mb-6 p-4 sm:p-6">
+          <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-1 md:grid-cols-4 sm:gap-4">
             {/* Search */}
             <div className="md:col-span-2">
               <div className="relative">
                 <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by reference, school, teacher, or subject..."
+                  placeholder="Search by reference, school, teacher..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                 />
               </div>
             </div>
 
-            {/* Status Filter */}
-            <div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Statuses</option>
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
+            {/* Filters Row for Mobile */}
+            <div className="flex space-x-3 sm:space-x-0 sm:contents">
+              {/* Status Filter */}
+              <div className="flex-1 sm:flex-none">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                >
+                  <option value="">Status</option>
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
 
-            {/* Priority Filter */}
-            <div>
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Priorities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
+              {/* Priority Filter */}
+              <div className="flex-1 sm:flex-none">
+                <select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                >
+                  <option value="">Priority</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -187,29 +192,30 @@ export default function ReportsPage() {
           <>
             {/* Desktop Table */}
             <div className="hidden md:block bg-white rounded-lg shadow-sm overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Report
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      School & Teacher
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Priority
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">
+                        Report
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
+                        School & Teacher
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
+                        Priority
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredReports.map((report) => (
                     <tr key={report.id} className="hover:bg-gray-50">
@@ -253,51 +259,60 @@ export default function ReportsPage() {
                             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm inline-flex items-center"
                           >
                             <Eye className="h-3 w-3 mr-1" />
-                            View Details
+                            View
                           </Link>
                         </div>
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Cards */}
-            <div className="md:hidden space-y-4">
+                  </tbody>
+                </table>
+              </div>
+            </div>            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3">
               {filteredReports.map((report) => (
-                <div key={report.id} className="bg-white rounded-lg shadow-sm p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="font-medium text-gray-900">{report.referenceNumber}</div>
-                    <div className="flex space-x-2">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(report.status)}`}>
+                <div key={report.id} className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                  {/* Header with Reference and Badges */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="font-semibold text-gray-900 text-base">{report.referenceNumber}</div>
+                    <div className="flex flex-col space-y-1">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full text-center ${getStatusColor(report.status)}`}>
                         {report.status.replace('_', ' ').toUpperCase()}
                       </span>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(report.priority)}`}>
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full text-center ${getPriorityColor(report.priority)}`}>
                         {report.priority.toUpperCase()}
                       </span>
                     </div>
                   </div>
                   
-                  <div className="text-sm text-gray-600 mb-2">
-                    <div className="font-medium">{report.school.name}</div>
-                    <div>{report.teacherName} • {report.grade} • {report.subject}</div>
+                  {/* School and Teacher Info */}
+                  <div className="mb-3">
+                    <div className="font-medium text-gray-900 text-sm mb-1">{report.school.name}</div>
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium">{report.teacherName}</span>
+                      <span className="mx-1">•</span>
+                      <span>{report.grade}</span>
+                      <span className="mx-1">•</span>
+                      <span>{report.subject}</span>
+                    </div>
                   </div>
                   
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                  {/* Description */}
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
                     {report.description}
                   </p>
                   
-                  <div className="flex items-center justify-between">
+                  {/* Footer with Date and Action */}
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                     <div className="text-xs text-gray-500">
                       {formatDate(report.createdAt)}
                     </div>
                     <Link
                       href={`/reports/${report.id}`}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm font-medium inline-flex items-center"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center shadow-sm"
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      View & Act
+                      View
                     </Link>
                   </div>
                 </div>
@@ -306,49 +321,81 @@ export default function ReportsPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Showing {((currentPage - 1) * reportsPerPage) + 1} to {Math.min(currentPage * reportsPerPage, totalReports)} of {totalReports} reports
+              <div className="mt-4 sm:mt-6">
+                {/* Mobile Pagination */}
+                <div className="flex flex-col space-y-3 sm:hidden">
+                  <div className="text-sm text-gray-700 text-center">
+                    Page {currentPage} of {totalPages} ({totalReports} total reports)
+                  </div>
+                  <div className="flex justify-center space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-1 max-w-20"
+                    >
+                      ← Prev
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 flex-1 max-w-20"
+                    >
+                      Next →
+                    </button>
+                  </div>
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Previous
-                  </button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + Math.max(1, currentPage - 2)
-                    if (page > totalPages) return null
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-2 text-sm border rounded-lg ${
-                          currentPage === page
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  })}
-                  <button
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
+                
+                {/* Desktop Pagination */}
+                <div className="hidden sm:flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {((currentPage - 1) * reportsPerPage) + 1} to {Math.min(currentPage * reportsPerPage, totalReports)} of {totalReports} reports
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const page = i + Math.max(1, currentPage - 2)
+                      if (page > totalPages) return null
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-2 text-sm border rounded-lg ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    })}
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
             {filteredReports.length === 0 && !loading && (
-              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                <p className="text-gray-600">No reports found matching your criteria.</p>
+              <div className="bg-white rounded-lg shadow-sm p-6 sm:p-8 text-center">
+                <div className="text-gray-400 mb-3">
+                  <Search className="h-12 w-12 mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
+                <p className="text-gray-600 text-sm">
+                  No reports match your current search criteria. Try adjusting your filters or search terms.
+                </p>
               </div>
             )}
           </>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Plus, Search, Edit, Trash2, Key, Settings, Mail, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import Navigation from '@/components/Navigation'
 
 interface Officer {
   id: string
@@ -199,17 +200,18 @@ export default function OfficersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <Navigation />
+      
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-                ← Back to Dashboard
-              </Link>
-              <div className="flex items-center space-x-3">
-                <Users className="h-8 w-8 text-primary-600" />
-                <h1 className="text-2xl font-bold text-gray-900">Officers Management</h1>
+            <div className="flex items-center space-x-3">
+              <Users className="h-8 w-8 text-primary-600" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Officers Management</h1>
+                <p className="text-gray-600">Manage and monitor education officers</p>
               </div>
             </div>
             <button
@@ -221,10 +223,7 @@ export default function OfficersPage() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex flex-col sm:flex-row gap-4">

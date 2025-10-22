@@ -5,11 +5,19 @@ import { passwordOperations } from '@/lib/auth'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { token, password } = body
+    const { code, password } = body
 
-    if (!token || !password) {
+    if (!code || !password) {
       return NextResponse.json(
-        { error: 'Reset token and new password are required' },
+        { error: 'Reset code and new password are required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate code format (6 digits)
+    if (!/^\d{6}$/.test(code)) {
+      return NextResponse.json(
+        { error: 'Invalid code format. Please enter a 6-digit code.' },
         { status: 400 }
       )
     }
@@ -24,24 +32,24 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Validate token and get associated email
-    const { data: tokenData, error: tokenError } = await supabase
+    // Validate code and get associated email
+    const { data: codeData, error: codeError } = await supabase
       .from('sms1_otp_codes')
       .select('*')
-      .eq('code', token)
+      .eq('code', code)
       .is('used_at', null)
       .gt('expires_at', new Date().toISOString())
       .single()
 
-    if (tokenError || !tokenData) {
+    if (codeError || !codeData) {
       return NextResponse.json(
-        { error: 'Invalid or expired reset token' },
+        { error: 'Invalid or expired reset code' },
         { status: 400 }
       )
     }
 
-    // Type assertion for token data
-    const token_data = tokenData as any
+    // Type assertion for code data
+    const code_data = codeData as any
 
     // Hash the new password
     const hashedPassword = await passwordOperations.hash(password)
@@ -53,7 +61,7 @@ export async function POST(request: NextRequest) {
         password_hash: hashedPassword,
         updated_at: new Date().toISOString()
       })
-      .eq('email', token_data.email)
+      .eq('email', code_data.email)
 
     if (updateError) {
       console.error('Error updating password:', updateError)
@@ -63,16 +71,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Mark token as used
+    // Mark code as used
     const { error: markUsedError } = await (supabase as any)
       .from('sms1_otp_codes')
       .update({ 
         used_at: new Date().toISOString() 
       })
-      .eq('code', token)
+      .eq('code', code)
 
     if (markUsedError) {
-      console.error('Error marking token as used:', markUsedError)
+      console.error('Error marking code as used:', markUsedError)
       // Don't fail the request if this fails, password was already updated
     }
 
