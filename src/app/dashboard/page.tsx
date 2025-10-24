@@ -293,40 +293,46 @@ export default function DashboardPage() {
             {/* Reports Over Time */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Reports Over Time (14d)</h3>
-              <div className="h-48 flex items-end justify-center space-x-2 relative">
+              <div className="h-48 w-full relative overflow-hidden">
                 {/* Interactive bar chart */}
                 {reportsOverTime.length > 0 ? (
-                  reportsOverTime.map((dataPoint, index) => {
-                    const maxCount = Math.max(...reportsOverTime.map(d => d.count), 1)
-                    const heightPercentage = (dataPoint.count / maxCount) * 100
-                    const minHeight = 8 // Minimum height for visibility
-                    const height = Math.max((heightPercentage / 100) * 120, minHeight) // Max height 120px
-                    
-                    return (
-                      <div key={index} className="flex flex-col items-center space-y-1 relative">
-                        <div 
-                          className={`w-8 bg-primary-500 rounded-t cursor-pointer transition-all duration-200 ${
-                            hoveredBar === index ? 'bg-primary-600 transform scale-105' : ''
-                          }`}
-                          style={{ height: `${height}px` }}
-                          onMouseEnter={() => setHoveredBar(index)}
-                          onMouseLeave={() => setHoveredBar(null)}
-                        />
-                        
-                        {/* Hover tooltip */}
-                        {hoveredBar === index && (
-                          <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
-                            {dataPoint.count} report{dataPoint.count !== 1 ? 's' : ''}
-                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-2 border-transparent border-t-gray-900"></div>
-                          </div>
-                        )}
-                        
-                        <span className="text-xs text-gray-500">
-                          {dataPoint.label}
-                        </span>
-                      </div>
-                    )
-                  })
+                  <div className="h-full flex items-end justify-between px-1">
+                    {reportsOverTime.map((dataPoint, index) => {
+                      const maxCount = Math.max(...reportsOverTime.map(d => d.count), 1)
+                      const heightPercentage = (dataPoint.count / maxCount) * 100
+                      const minHeight = 8 // Minimum height for visibility
+                      const height = Math.max((heightPercentage / 100) * 120, minHeight) // Max height 120px
+                      
+                      return (
+                        <div key={index} className="flex flex-col items-center space-y-1 relative flex-1 max-w-none">
+                          <div 
+                            className={`bg-primary-500 rounded-t cursor-pointer transition-all duration-200 mx-auto ${
+                              hoveredBar === index ? 'bg-primary-600 transform scale-y-105' : ''
+                            }`}
+                            style={{ 
+                              height: `${height}px`,
+                              width: `${Math.min(100 / reportsOverTime.length * 0.7, 24)}%`,
+                              maxWidth: '20px'
+                            }}
+                            onMouseEnter={() => setHoveredBar(index)}
+                            onMouseLeave={() => setHoveredBar(null)}
+                          />
+                          
+                          {/* Hover tooltip */}
+                          {hoveredBar === index && (
+                            <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                              {dataPoint.count} report{dataPoint.count !== 1 ? 's' : ''}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-2 border-transparent border-t-gray-900"></div>
+                            </div>
+                          )}
+                          
+                          <span className="text-xs text-gray-500 text-center truncate w-full">
+                            {dataPoint.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
                 ) : (
                   <div className="flex items-center justify-center w-full h-32 text-gray-400">
                     <div className="text-center">
