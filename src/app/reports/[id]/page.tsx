@@ -419,24 +419,33 @@ export default function ReportDetailsPage() {
               
               {/* Action Buttons */}
               <div className="flex items-center space-x-3">
-                <button 
-                  onClick={() => setShowStatusModal(true)}
-                  className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Change Status
-                </button>
-                <button 
-                  onClick={() => setShowOfficerModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Assign Officer
-                </button>
-                <button 
-                  onClick={() => setShowPriorityModal(true)}
-                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Change Priority
-                </button>
+                {report.status === 'closed' ? (
+                  <div className="bg-gray-100 text-gray-500 px-4 py-2 rounded-lg font-medium flex items-center space-x-2">
+                    <span>🔒</span>
+                    <span>Report Closed - Actions Restricted</span>
+                  </div>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => setShowStatusModal(true)}
+                      className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Change Status
+                    </button>
+                    <button 
+                      onClick={() => setShowOfficerModal(true)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Assign Officer
+                    </button>
+                    <button 
+                      onClick={() => setShowPriorityModal(true)}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Change Priority
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -497,13 +506,20 @@ export default function ReportDetailsPage() {
                   <MessageSquare className="h-5 w-5 text-gray-600" />
                   <h2 className="text-lg font-semibold text-gray-900">Investigation Notes</h2>
                 </div>
-                <button
-                  onClick={() => setShowAddNote(!showAddNote)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  <span>Add Note</span>
-                </button>
+                {report.status !== 'closed' ? (
+                  <button
+                    onClick={() => setShowAddNote(!showAddNote)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    <span>Add Note</span>
+                  </button>
+                ) : (
+                  <div className="bg-gray-100 text-gray-500 px-4 py-2 rounded-lg font-medium text-sm flex items-center space-x-2">
+                    <span>🔒</span>
+                    <span>Notes locked for closed reports</span>
+                  </div>
+                )}
               </div>
 
               {showAddNote && (

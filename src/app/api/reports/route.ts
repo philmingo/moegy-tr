@@ -3,6 +3,28 @@ import { createAdminClient } from '@/lib/supabase'
 import { cookies } from 'next/headers'
 import { jwtOperations } from '@/lib/auth'
 
+// Function to trigger AI analysis of a new report
+async function triggerReportAnalysis(reportId: string): Promise<void> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/reports/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ reportId }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Analysis API returned ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log(`Report ${reportId} analysis result:`, result.action)
+  } catch (error) {
+    console.error(`Failed to analyze report ${reportId}:`, error)
+  }
+}
+
 interface DatabaseReport {
   id: string
   reference_number: string
@@ -350,8 +372,10 @@ export async function POST(request: NextRequest) {
     // Type assertion for the returned report
     const report = newReport as any
 
-    // TODO: Auto-assign to officers based on region and school level
-    // TODO: Send email notifications
+    // Trigger AI analysis for the new report (async, don't block response)
+    triggerReportAnalysis(report.id).catch((error: any) => {
+      console.error('Failed to trigger AI analysis:', error)
+    })
 
     return NextResponse.json({
       message: 'Report submitted successfully',

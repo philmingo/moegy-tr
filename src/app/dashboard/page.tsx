@@ -40,6 +40,12 @@ interface RecentReport {
   time: string
 }
 
+interface ReportOverTime {
+  date: string
+  count: number
+  label: string
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [stats, setStats] = useState<DashboardStats>({
@@ -55,6 +61,7 @@ export default function DashboardPage() {
     totalOpen: 0
   })
   const [recentReports, setRecentReports] = useState<RecentReport[]>([])
+  const [reportsOverTime, setReportsOverTime] = useState<ReportOverTime[]>([])
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [lastFetch, setLastFetch] = useState<number>(0)
@@ -153,11 +160,13 @@ export default function DashboardPage() {
         setStats(dashboardData.stats)
         setQuickMetrics(dashboardData.quickMetrics)
         setRecentReports(dashboardData.recentReports)
+        setReportsOverTime(dashboardData.reportsOverTime || [])
         setLastFetch(now)
       } else {
         console.error('Failed to load dashboard data')
         // Set empty data if API fails
         setRecentReports([])
+        setReportsOverTime([])
       }
 
     } catch (error) {
@@ -286,38 +295,51 @@ export default function DashboardPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Reports Over Time (14d)</h3>
               <div className="h-48 flex items-end justify-center space-x-2 relative">
                 {/* Interactive bar chart */}
-                {[1, 2, 3, 1, 2, 1, 3].map((height, index) => (
-                  <div key={index} className="flex flex-col items-center space-y-1 relative">
-                    <div 
-                      className={`w-8 bg-primary-500 rounded-t cursor-pointer transition-all duration-200 ${
-                        height === 1 ? 'h-8' : height === 2 ? 'h-16' : 'h-24'
-                      } ${hoveredBar === index ? 'bg-primary-600 transform scale-105' : ''}`}
-                      onMouseEnter={() => setHoveredBar(index)}
-                      onMouseLeave={() => setHoveredBar(null)}
-                    />
+                {reportsOverTime.length > 0 ? (
+                  reportsOverTime.map((dataPoint, index) => {
+                    const maxCount = Math.max(...reportsOverTime.map(d => d.count), 1)
+                    const heightPercentage = (dataPoint.count / maxCount) * 100
+                    const minHeight = 8 // Minimum height for visibility
+                    const height = Math.max((heightPercentage / 100) * 120, minHeight) // Max height 120px
                     
-                    {/* Hover tooltip */}
-                    {hoveredBar === index && (
-                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
-                        {height} reports
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-2 border-transparent border-t-gray-900"></div>
+                    return (
+                      <div key={index} className="flex flex-col items-center space-y-1 relative">
+                        <div 
+                          className={`w-8 bg-primary-500 rounded-t cursor-pointer transition-all duration-200 ${
+                            hoveredBar === index ? 'bg-primary-600 transform scale-105' : ''
+                          }`}
+                          style={{ height: `${height}px` }}
+                          onMouseEnter={() => setHoveredBar(index)}
+                          onMouseLeave={() => setHoveredBar(null)}
+                        />
+                        
+                        {/* Hover tooltip */}
+                        {hoveredBar === index && (
+                          <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-10">
+                            {dataPoint.count} report{dataPoint.count !== 1 ? 's' : ''}
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-2 border-transparent border-t-gray-900"></div>
+                          </div>
+                        )}
+                        
+                        <span className="text-xs text-gray-500">
+                          {dataPoint.label}
+                        </span>
                       </div>
-                    )}
-                    
-                    <span className="text-xs text-gray-500">
-                      Oct {15 + index}
-                    </span>
+                    )
+                  })
+                ) : (
+                  <div className="flex items-center justify-center w-full h-32 text-gray-400">
+                    <div className="text-center">
+                      <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Loading chart data...</p>
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
               <div className="flex items-center justify-center space-x-4 mt-4 text-xs">
                 <div className="flex items-center space-x-1">
                   <div className="w-3 h-3 bg-primary-500 rounded"></div>
-                  <span className="text-gray-600">new</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-primary-300 rounded"></div>
-                  <span className="text-gray-600">submissions</span>
+                  <span className="text-gray-600">daily reports</span>
                 </div>
               </div>
             </div>

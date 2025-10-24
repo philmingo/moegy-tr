@@ -92,6 +92,32 @@ async function getAccessibleReportIds(userId: string, role: string) {
   return accessibleReportIds.size > 0 ? Array.from(accessibleReportIds) : []
 }
 
+function calculateReportsOverTime(reports: any[]): any[] {
+  const last14Days = []
+  const now = new Date()
+  
+  // Generate the last 14 days
+  for (let i = 13; i >= 0; i--) {
+    const date = new Date(now)
+    date.setDate(date.getDate() - i)
+    const dateStr = date.toISOString().split('T')[0]
+    
+    // Count reports for this date
+    const reportsForDate = reports.filter(report => {
+      const reportDate = new Date(report.created_at).toISOString().split('T')[0]
+      return reportDate === dateStr
+    }).length
+    
+    last14Days.push({
+      date: dateStr,
+      count: reportsForDate,
+      label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    })
+  }
+  
+  return last14Days
+}
+
 export async function GET() {
   try {
     const user = await getAuthenticatedUser()
@@ -241,10 +267,14 @@ export async function GET() {
       }
     })
 
+    // Calculate reports over time (last 14 days)
+    const reportsOverTime = calculateReportsOverTime(allReports || [])
+
     return NextResponse.json({
       stats: dashboardStats,
       quickMetrics,
-      recentReports
+      recentReports,
+      reportsOverTime
     })
 
   } catch (error) {
