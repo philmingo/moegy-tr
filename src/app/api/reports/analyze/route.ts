@@ -15,42 +15,6 @@ const supabase = createClient(
 
 async function analyzeReportWithAI(reportData: any): Promise<{ isValid: boolean; reason: string; confidence: number }> {
   try {
-    // Pre-analysis checks for obvious gibberish/test data
-    const isGibberish = (text: string): boolean => {
-      if (!text || text.trim().length < 2) return false
-      
-      // Check for patterns that indicate gibberish
-      const gibberishPatterns = [
-        /^[a-z]{2,}\s+[a-z]{2,}\s+[a-z]{2,}/i, // Multiple random letter sequences
-        /^(df|sd|fs|ds|as|qw|er|ty|ui|op|zx|cv|bn){2,}/i, // Keyboard mashing patterns
-        /[a-z]{8,}/i, // Very long letter sequences without spaces
-        /^[a-z]{1,3}\s+[a-z]{1,3}\s+[a-z]{1,3}/i, // Short random sequences
-        /^(test|asdf|qwer|zxcv|dfgh|sdfg)/i, // Common test patterns
-      ]
-      
-      return gibberishPatterns.some(pattern => pattern.test(text.trim()))
-    }
-    
-    // Check if key fields contain gibberish
-    if (isGibberish(reportData.teacherName) || 
-        isGibberish(reportData.description) || 
-        isGibberish(reportData.subject)) {
-      return {
-        isValid: false,
-        reason: 'Report contains gibberish or nonsensical text that appears to be test data rather than a genuine educational concern.',
-        confidence: 0.95
-      }
-    }
-    
-    // Check for extremely short or meaningless descriptions
-    if (reportData.description && reportData.description.trim().length < 10) {
-      return {
-        isValid: false,
-        reason: 'Report description is too brief to provide actionable information for investigation.',
-        confidence: 0.85
-      }
-    }
-
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
       throw new Error('Gemini API key not configured')
@@ -58,7 +22,7 @@ async function analyzeReportWithAI(reportData: any): Promise<{ isValid: boolean;
 
     const analysisPrompt = `You are an AI assistant for the Guyana Ministry of Education's teacher absence reporting system. 
 
-Please analyze this teacher absence report and determine if it contains sufficient, meaningful information to warrant investigation by education officers.
+Please analyze this teacher absence report and determine if it contains meaningful, legitimate information that warrants investigation by education officers.
 
 Report Details:
 - School: ${reportData.schoolName}
@@ -68,30 +32,30 @@ Report Details:
 - Reporter Type: ${reportData.reporterType}
 - Description: ${reportData.description}
 
-STRICT Evaluation Criteria - Mark as INVALID if ANY of the following apply:
-1. Teacher name is gibberish, random characters, or meaningless (e.g., "dfdsklfsd", "asdfgh", "xyz123")
-2. Description contains only random characters, keyboard mashing, or nonsensical text (e.g., "df dsfsd sdffsdf", "asdasd sdf sdf")
-3. Subject field contains gibberish or random text (e.g., "llfsd fsdlfsdfk", "random text")
-4. Description is extremely vague with no actionable information (just "absent" or "not here")
-5. Multiple fields contain what appears to be test data or placeholder text
-6. The combination of fields suggests this is spam, test data, or not a genuine report
+Analyze for:
+1. GIBBERISH DETECTION: Does the content appear to be random characters, keyboard mashing, or nonsensical text?
+2. MEANINGFUL CONTENT: Does the report contain coherent, actionable information about a teacher absence?
+3. LEGITIMATE CONCERN: Is this a genuine educational issue that requires investigation?
 
-VALID reports should have:
-- Recognizable human names for teachers (even if misspelled)
-- Coherent descriptions in proper language about actual absence situations
-- Meaningful subject names (Math, English, Science, etc.)
-- Logical consistency across all fields
+Examples of INVALID reports (mark as gibberish):
+- Teacher names like "dfdsklfsd", "asdfgh", "random text"
+- Descriptions like "df dsfsd sdffsdf", "keyboard mashing", "test test test"
+- Subject fields with gibberish like "llfsd fsdlfsdfk"
+- Any combination that seems like test data or spam
 
-IMPORTANT: Be MORE STRICT than conservative. If ANY field contains obvious gibberish or the report seems like test data, mark it as INVALID.
+Examples of VALID reports:
+- Real teacher names (even if misspelled): "John Smith", "Mary Johnson"
+- Coherent descriptions: "Teacher was absent for 3 days without notice"
+- Proper subjects: "Mathematics", "English", "Science"
+
+Be strict about detecting gibberish and test data. If ANY major field contains nonsensical content, mark the entire report as invalid.
 
 Respond with a JSON object containing:
 {
   "isValid": true/false,
-  "reason": "Clear explanation of why this report is/isn't valid for investigation",
+  "reason": "Clear explanation focusing on whether content is gibberish or legitimate",
   "confidence": 0.1-1.0 (confidence level)
-}
-
-Focus on detecting nonsensical text, gibberish, and test data. Real educational concerns should be clearly distinguishable from random text.`
+}`
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -141,36 +105,10 @@ Focus on detecting nonsensical text, gibberish, and test data. Real educational 
   } catch (error) {
     console.error('AI analysis error:', error)
     
-    // If AI fails, do a basic check for obvious gibberish
-    const isGibberish = (text: string): boolean => {
-      if (!text || text.trim().length < 2) return false
-      
-      const gibberishPatterns = [
-        /^[a-z]{2,}\s+[a-z]{2,}\s+[a-z]{2,}/i,
-        /^(df|sd|fs|ds|as|qw|er|ty|ui|op|zx|cv|bn){2,}/i,
-        /[a-z]{8,}/i,
-        /^[a-z]{1,3}\s+[a-z]{1,3}\s+[a-z]{1,3}/i,
-        /^(test|asdf|qwer|zxcv|dfgh|sdfg)/i,
-      ]
-      
-      return gibberishPatterns.some(pattern => pattern.test(text.trim()))
-    }
-    
-    // If key fields contain obvious gibberish, mark as invalid even when AI fails
-    if (isGibberish(reportData.teacherName) || 
-        isGibberish(reportData.description) || 
-        isGibberish(reportData.subject)) {
-      return {
-        isValid: false,
-        reason: 'AI analysis unavailable, but report contains obvious gibberish or test data',
-        confidence: 0.8
-      }
-    }
-    
-    // Default to keeping report open if AI analysis fails and no obvious gibberish detected
+    // Default to keeping report open if AI analysis fails - let manual review handle it
     return {
       isValid: true,
-      reason: 'AI analysis unavailable - defaulting to manual review',
+      reason: 'AI analysis unavailable - report requires manual review',
       confidence: 0.3
     }
   }
@@ -282,20 +220,20 @@ export async function POST(request: NextRequest) {
       // Add system comment explaining closure
       await addSystemComment(
         reportId, 
-        `🤖 AUTOMATED ANALYSIS: This report has been automatically closed due to insufficient information.\n\nReason: ${analysis.reason}\n\nConfidence Level: ${Math.round(analysis.confidence * 100)}%\n\nIf you believe this was closed in error, please contact an administrator to reopen it.`
+        `🤖 AI ANALYSIS - REPORT AUTOMATICALLY CLOSED\n\n${analysis.reason}\n\nConfidence Level: ${Math.round(analysis.confidence * 100)}%\n\nThis report was determined to contain gibberish or test data. If you believe this was closed in error, please contact an administrator to reopen it.`
       )
 
       return NextResponse.json({
         action: 'closed',
         reason: analysis.reason,
         confidence: analysis.confidence,
-        message: 'Report automatically closed due to insufficient information'
+        message: 'Report automatically closed - AI detected gibberish or test data'
       })
     } else {
       // Report is valid - add analysis comment and keep open
       await addSystemComment(
         reportId,
-        `✅ AUTOMATED ANALYSIS: This report has been reviewed and approved for investigation.\n\nReason: ${analysis.reason}\n\nConfidence Level: ${Math.round(analysis.confidence * 100)}%\n\nThe report is now ready for officer assignment and follow-up.`
+        `✅ AI ANALYSIS - REPORT APPROVED\n\n${analysis.reason}\n\nConfidence Level: ${Math.round(analysis.confidence * 100)}%\n\nThis report has been reviewed and approved for investigation. Notifications have been sent to relevant officers.`
       )
 
       // Send notifications to relevant officers (async, don't block response)

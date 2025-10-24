@@ -27,7 +27,9 @@ interface NotificationContext {
 
 async function getRelevantOfficers(regionId: string, schoolLevelId: string): Promise<any[]> {
   try {
-    // Get officers who are subscribed to this region/school level combination
+    console.log(`Looking for officers subscribed to Region: ${regionId}, School Level: ${schoolLevelId}`)
+    
+    // Get officers who are subscribed to this specific region/school level combination
     const { data: subscriptions, error } = await supabase
       .from('sms1_officer_subscriptions')
       .select(`
@@ -49,29 +51,33 @@ async function getRelevantOfficers(regionId: string, schoolLevelId: string): Pro
       return []
     }
 
-    // Filter for active, approved officers
-    const officers = (subscriptions || [])
+    // Filter for active, approved officers with subscriptions
+    const subscribedOfficers = (subscriptions || [])
       .map(sub => (sub as any).sms1_users)
       .filter(officer => officer && officer.is_approved)
 
-    // Also get admin and senior officers who should always be notified
-    const { data: adminOfficers, error: adminError } = await supabase
-      .from('sms1_users')
-      .select('id, email, full_name, role')
-      .in('role', ['admin', 'senior_officer'])
-      .eq('is_approved', true)
+    console.log(`Found ${subscribedOfficers.length} officers with specific subscriptions`)
 
-    if (adminError) {
-      console.error('Error fetching admin officers:', adminError)
+    // Only include admins if there are no specific subscribers (fallback scenario)
+    if (subscribedOfficers.length === 0) {
+      console.log('No subscribed officers found, falling back to admins only')
+      
+      const { data: adminOfficers, error: adminError } = await supabase
+        .from('sms1_users')
+        .select('id, email, full_name, role')
+        .eq('role', 'admin')
+        .eq('is_approved', true)
+
+      if (adminError) {
+        console.error('Error fetching admin officers:', adminError)
+        return []
+      }
+
+      return adminOfficers || []
     }
 
-    // Combine and deduplicate officers
-    const allOfficers = [...officers, ...(adminOfficers || [])]
-    const uniqueOfficers = allOfficers.filter((officer, index, self) =>
-      index === self.findIndex(o => o.id === officer.id)
-    )
-
-    return uniqueOfficers
+    // Return only the specifically subscribed officers
+    return subscribedOfficers
   } catch (error) {
     console.error('Error getting relevant officers:', error)
     return []
@@ -210,11 +216,12 @@ export async function sendReportNotifications(reportId: string): Promise<void> {
     const officers = await getRelevantOfficers(school?.region_id, school?.school_level_id)
 
     if (officers.length === 0) {
-      console.log(`No officers found to notify for report ${context.reportRef}`)
+      console.log(`No officers found to notify for report ${context.reportRef} (Region: ${context.regionName}, Level: ${context.schoolLevelName})`)
       return
     }
 
-    console.log(`Sending notifications to ${officers.length} officers for report ${context.reportRef}`)
+    console.log(`Sending notifications to ${officers.length} specifically subscribed officers for report ${context.reportRef}`)
+    console.log(`Officer emails: ${officers.map(o => o.email).join(', ')}`)
 
     // Send notifications to all relevant officers
     const notificationPromises = officers.map(officer => 
