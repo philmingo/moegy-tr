@@ -45,8 +45,9 @@ interface Report {
     region: {
       name: string
     }
-    address: string
-    phone: string
+    schoolLevel: {
+      name: string
+    }
   }
   grade: string
   teacherName: string
@@ -481,10 +482,10 @@ export default function ReportDetailsPage() {
                   <h3 className="font-semibold text-gray-900 text-lg mb-2">{report.school.name}</h3>
                   <p className="text-gray-600 mb-1">{report.school.code}</p>
                   <p className="text-sm text-gray-500">
-                    Address: {report.school.address || 'Not available'}
+                    Region: {report.school.region?.name || 'Not available'}
                   </p>
                   <p className="text-sm text-gray-500">
-                    Phone: {report.school.phone || 'Not available'}
+                    School Level: {report.school.schoolLevel?.name || 'Not available'}
                   </p>
                 </div>
                 

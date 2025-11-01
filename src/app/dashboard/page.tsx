@@ -138,7 +138,8 @@ export default function DashboardPage() {
 
       if (!authResponse.ok) {
         // Not authenticated, redirect to login
-        router.push('/admin')
+        console.log('Authentication failed, redirecting to login')
+        router.replace('/admin')
         return
       }
 
@@ -149,6 +150,11 @@ export default function DashboardPage() {
         role: authData.user.role,
         email: authData.user.email
       })
+
+      // Store auth state in localStorage for persistence
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem('userEmail', authData.user.email)
+      localStorage.setItem('userRole', authData.user.role)
 
       // Load dashboard data from API
       const dashboardResponse = await fetch('/api/dashboard', {
@@ -171,7 +177,11 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error('Auth check failed:', error)
-      router.push('/admin')
+      // Clear any stored auth state on error
+      localStorage.removeItem('isLoggedIn')
+      localStorage.removeItem('userEmail')
+      localStorage.removeItem('userRole')
+      router.replace('/admin')
     } finally {
       setIsLoading(false)
     }

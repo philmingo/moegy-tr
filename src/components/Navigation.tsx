@@ -233,7 +233,7 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
                       className="flex items-center space-x-2 px-3 py-2 rounded-lg font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 transition-colors"
                     >
                       <User className="h-4 w-4" />
-                      <span>Officer Login</span>
+                      <span>Report Dashboard</span>
                     </Link>
                   </div>
                 )}
@@ -356,7 +356,7 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <User className="h-5 w-5" />
-                    <span>Officer Login</span>
+                    <span>Report Dashboard</span>
                   </Link>
                 )}
               </>

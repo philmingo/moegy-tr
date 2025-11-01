@@ -32,6 +32,10 @@ export async function GET(
           sms_regions (
             id,
             name
+          ),
+          sms_school_levels (
+            id,
+            name
           )
         ),
         sms1_report_assignments (
@@ -96,8 +100,9 @@ export async function GET(
         region: { 
           name: report.sms_schools?.sms_regions?.name || 'Unknown Region' 
         },
-        address: 'Address information not available',
-        phone: 'Phone information not available'
+        schoolLevel: {
+          name: report.sms_schools?.sms_school_levels?.name || 'Unknown Level'
+        }
       },
       grade: report.grade || 'Not specified',
       teacherName: report.teacher_name,
